@@ -24,6 +24,7 @@
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 #include "ssd1306_tests.h"
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -52,7 +53,17 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
+typedef enum {
+    STATE_SOLID,
+    STATE_BREATHING,
+    STATE_RAINBOW,
+    STATE_SLEEP
+} SystemState;
 
+SystemState current_state = STATE_SOLID;
+uint8_t mode_changed_flag = 1; // Khởi tạo bằng 1 để in trạng thái ngay khi bật máy
+int16_t breath_val = 0;
+int8_t breath_step = 15;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -106,11 +117,21 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_USART1_UART_Init();
+
   /* USER CODE BEGIN 2 */
+  // Khởi tạo OLED
   ssd1306_Init();
   ssd1306_SetCursor(0, 0);
-  ssd1306_WriteString("STM32 OLED", Font_11x18, White);
+  ssd1306_WriteString("RGB LAMP READY", Font_7x10, White);
   ssd1306_UpdateScreen();
+
+  // Bật 3 kênh PWM của TIM3 cho LED RGB
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1); // Kênh Đỏ (PA6)
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2); // Kênh Xanh lá (PA7)
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3); // Kênh Xanh dương (PB0)
+
+  char startup_msg[] = "He thong Den RGB Mood Lamp san sang!\r\n";
+  HAL_UART_Transmit(&huart1, (uint8_t*)startup_msg, strlen(startup_msg), 100);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -120,8 +141,76 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+    if (mode_changed_flag == 1) {
+        mode_changed_flag = 0;
+        breath_val = 0;
+        breath_step = 15;
+        
+        switch(current_state) {
+            case STATE_SOLID: {
+                char msg_solid[] = "Che do hien tai: SOLID (Hien thi mau Do)\r\n";
+                HAL_UART_Transmit(&huart1, (uint8_t*)msg_solid, strlen(msg_solid), 100);
+                break;
+            }
+                
+            case STATE_BREATHING: {
+                char msg_breath[] = "Che do hien tai: BREATHING (Hien thi mau Xanh la)\r\n";
+                HAL_UART_Transmit(&huart1, (uint8_t*)msg_breath, strlen(msg_breath), 100);
+                break;
+            }
+                
+            case STATE_RAINBOW: {
+                char msg_rain[] = "Che do hien tai: RAINBOW (Hien thi mau Xanh duong)\r\n";
+                HAL_UART_Transmit(&huart1, (uint8_t*)msg_rain, strlen(msg_rain), 100);
+                break;
+            }
+                
+            case STATE_SLEEP: {
+                char msg_sleep[] = "Che do hien tai: SLEEP (Tat den)\r\n";
+                HAL_UART_Transmit(&huart1, (uint8_t*)msg_sleep, strlen(msg_sleep), 100);
+                break;
+            }
+        }
+    }
+
+    // Điều khiển PWM với Period = 999 (Max Brightness = 999)
+    switch(current_state) {
+        case STATE_SOLID:
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 999); // Bật MAX màu Đỏ
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0);
+            break;
+            
+        case STATE_BREATHING:
+            // Hiệu ứng thở mượt mà màu Xanh lá từ 0 -> 999
+            breath_val += breath_step;
+            if (breath_val >= 999) {
+                breath_val = 999;
+                breath_step = -15;
+            } else if (breath_val <= 0) {
+                breath_val = 0;
+                breath_step = 15;
+            }
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, breath_val); // Thở Xanh lá
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0);
+            HAL_Delay(15);
+            break;
+            
+        case STATE_RAINBOW:
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 999); // Bật MAX màu Xanh dương
+            break;
+            
+        case STATE_SLEEP:
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0);
+            break;
+    }
   /* USER CODE END 3 */
+  }
 }
 
 /**
@@ -315,7 +404,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 71;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
+  htim3.Init.Period = 999;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -426,7 +515,22 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    // Xử lý nút Đổi chế độ (PB12)
+    if (GPIO_Pin == GPIO_PIN_12) { 
+        current_state++;
+        if (current_state > STATE_SLEEP) {
+            current_state = STATE_SOLID;
+        }
+        mode_changed_flag = 1;
+    }
+    
+    // Xử lý nút Hẹn giờ (PB13)
+    if (GPIO_Pin == GPIO_PIN_13) { 
+        char msg_timer[] = "-> Nut Hen Gio vua duoc nhan!\r\n";
+        HAL_UART_Transmit(&huart1, (uint8_t*)msg_timer, strlen(msg_timer), 100);
+    }
+}
 /* USER CODE END 4 */
 
 /**
