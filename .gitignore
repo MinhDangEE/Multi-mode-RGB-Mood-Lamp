@@ -1,0 +1,15 @@
+# Build directories and generated binaries
+build/
+*.elf
+*.hex
+*.bin
+*.map
+*.su
+*.d
+*.o
+*.obj
+
+# IDE settings
+.vscode/
+.idea/
+compile_commands.json
