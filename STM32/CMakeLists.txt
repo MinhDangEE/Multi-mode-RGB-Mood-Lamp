@@ -44,7 +44,12 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
+    Core/Src/main.c
+    Core/Src/stm32f1xx_it.c
+    Core/Src/stm32f1xx_hal_msp.c
+    Core/Src/ssd1306.c          # <--- BẠN THÊM DÒNG NÀY VÀO ĐÂY
+    Core/Src/ssd1306_fonts.c    # <--- (Và các file .c khác của thư viện nếu có)
+    # ...
 )
 
 # Add include paths
