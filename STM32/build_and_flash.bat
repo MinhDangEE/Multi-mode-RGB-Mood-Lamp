@@ -36,7 +36,15 @@ if %errorlevel% neq 0 (
 :: 4. Flash
 echo.
 echo [4/4] Thuc hien Flash va Reset mach (Mode Under Reset)...
-STM32_Programmer_CLI -c port=SWD mode=UR freq=4000 -w build\test.bin 0x08000000 -v -rst
+if exist build\Debug\STM32.bin (
+    STM32_Programmer_CLI -c port=SWD mode=UR freq=4000 -w build\Debug\STM32.bin 0x08000000 -v -rst
+) else if exist build\STM32.bin (
+    STM32_Programmer_CLI -c port=SWD mode=UR freq=4000 -w build\STM32.bin 0x08000000 -v -rst
+) else if exist build\Debug\STM32.elf (
+    STM32_Programmer_CLI -c port=SWD mode=UR freq=4000 -w build\Debug\STM32.elf -v -rst
+) else (
+    echo [LOI] Khong tim thay file STM32.bin hoac STM32.elf trong thu muc build!
+)
 
 echo.
 echo === HOAN THANH XUAT SAC! ===
