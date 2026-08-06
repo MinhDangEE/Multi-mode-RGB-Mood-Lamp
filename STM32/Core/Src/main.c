@@ -516,19 +516,35 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-    // Xử lý nút Đổi chế độ (PB12)
+    uint32_t current_time = HAL_GetTick();
+    static uint32_t last_pb12_time = 0;
+    static uint32_t last_pb13_time = 0;
+
+    // Xử lý nút Đổi chế độ (PB12) - Thêm thuật toán Chống dội (Debounce 200ms)
     if (GPIO_Pin == GPIO_PIN_12) { 
-        current_state++;
-        if (current_state > STATE_SLEEP) {
-            current_state = STATE_SOLID;
+        if ((current_time - last_pb12_time) > 200) {
+            // Xác nhận lại nút vẫn đang được nhấn (Mức 0/RESET vì kích cạnh xuống)
+            if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12) == GPIO_PIN_RESET) {
+                current_state++;
+                if (current_state > STATE_SLEEP) {
+                    current_state = STATE_SOLID;
+                }
+                mode_changed_flag = 1;
+            }
+            last_pb12_time = current_time;
         }
-        mode_changed_flag = 1;
     }
     
-    // Xử lý nút Hẹn giờ (PB13)
+    // Xử lý nút Hẹn giờ (PB13) - Thêm thuật toán Chống dội (Debounce 200ms)
     if (GPIO_Pin == GPIO_PIN_13) { 
-        char msg_timer[] = "-> Nut Hen Gio vua duoc nhan!\r\n";
-        HAL_UART_Transmit(&huart1, (uint8_t*)msg_timer, strlen(msg_timer), 100);
+        if ((current_time - last_pb13_time) > 200) {
+            // Xác nhận lại nút vẫn đang được nhấn (Mức 0/RESET)
+            if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13) == GPIO_PIN_RESET) {
+                char msg_timer[] = "-> Nut Hen Gio vua duoc nhan!\r\n";
+                HAL_UART_Transmit(&huart1, (uint8_t*)msg_timer, strlen(msg_timer), 100);
+            }
+            last_pb13_time = current_time;
+        }
     }
 }
 /* USER CODE END 4 */
