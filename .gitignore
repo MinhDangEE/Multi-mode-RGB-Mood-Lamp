@@ -1,8 +1,16 @@
+# Ignore all standalone files directly in root directory (except .gitignore and README.md)
+/*
+!.gitignore
+!README.md
+!Core/
+!Drivers/
+!cmake/
+!docs/
+
 # Build directories and generated binaries
 build/
 **/build/
 **/build*/
-/STM32/build/
 *.elf
 *.hex
 *.bin
@@ -15,12 +23,6 @@ CMakeFiles/
 **/CMakeFiles/
 CMakeCache.txt
 **/CMakeCache.txt
-
-# Root-level standalone scripts and files
-/*.bat
-/*.cmd
-/*.sh
-/*.exe
 
 # IDE and tool settings
 .vscode/
