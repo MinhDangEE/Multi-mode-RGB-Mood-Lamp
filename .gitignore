@@ -1,5 +1,8 @@
 # Build directories and generated binaries
 build/
+**/build/
+**/build*/
+/STM32/build/
 *.elf
 *.hex
 *.bin
@@ -8,8 +11,12 @@ build/
 *.d
 *.o
 *.obj
+CMakeFiles/
+**/CMakeFiles/
+CMakeCache.txt
+**/CMakeCache.txt
 
-# IDE settings
+# IDE and tool settings
 .vscode/
 .idea/
 compile_commands.json
