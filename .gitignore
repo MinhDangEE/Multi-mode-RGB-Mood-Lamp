@@ -16,6 +16,12 @@ CMakeFiles/
 CMakeCache.txt
 **/CMakeCache.txt
 
+# Root-level standalone scripts and files
+/*.bat
+/*.cmd
+/*.sh
+/*.exe
+
 # IDE and tool settings
 .vscode/
 .idea/
