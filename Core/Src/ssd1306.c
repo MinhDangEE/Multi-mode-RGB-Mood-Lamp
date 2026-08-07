@@ -5,18 +5,87 @@
 
 #if defined(SSD1306_USE_I2C)
 
+#define SW_SCL_PIN GPIO_PIN_6
+#define SW_SDA_PIN GPIO_PIN_7
+#define SW_I2C_PORT GPIOB
+
+static void SW_I2C_Delay(void) {
+    for(volatile int i=0; i<10; i++);
+}
+
+static void SW_I2C_Start(void) {
+    HAL_GPIO_WritePin(SW_I2C_PORT, SW_SDA_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(SW_I2C_PORT, SW_SCL_PIN, GPIO_PIN_SET);
+    SW_I2C_Delay();
+    HAL_GPIO_WritePin(SW_I2C_PORT, SW_SDA_PIN, GPIO_PIN_RESET);
+    SW_I2C_Delay();
+    HAL_GPIO_WritePin(SW_I2C_PORT, SW_SCL_PIN, GPIO_PIN_RESET);
+    SW_I2C_Delay();
+}
+
+static void SW_I2C_Stop(void) {
+    HAL_GPIO_WritePin(SW_I2C_PORT, SW_SDA_PIN, GPIO_PIN_RESET);
+    SW_I2C_Delay();
+    HAL_GPIO_WritePin(SW_I2C_PORT, SW_SCL_PIN, GPIO_PIN_SET);
+    SW_I2C_Delay();
+    HAL_GPIO_WritePin(SW_I2C_PORT, SW_SDA_PIN, GPIO_PIN_SET);
+    SW_I2C_Delay();
+}
+
+static void SW_I2C_WriteByte(uint8_t byte) {
+    for(int i=0; i<8; i++) {
+        if(byte & 0x80) HAL_GPIO_WritePin(SW_I2C_PORT, SW_SDA_PIN, GPIO_PIN_SET);
+        else HAL_GPIO_WritePin(SW_I2C_PORT, SW_SDA_PIN, GPIO_PIN_RESET);
+        byte <<= 1;
+        SW_I2C_Delay();
+        HAL_GPIO_WritePin(SW_I2C_PORT, SW_SCL_PIN, GPIO_PIN_SET);
+        SW_I2C_Delay();
+        HAL_GPIO_WritePin(SW_I2C_PORT, SW_SCL_PIN, GPIO_PIN_RESET);
+    }
+    // ACK clock
+    HAL_GPIO_WritePin(SW_I2C_PORT, SW_SDA_PIN, GPIO_PIN_SET);
+    SW_I2C_Delay();
+    HAL_GPIO_WritePin(SW_I2C_PORT, SW_SCL_PIN, GPIO_PIN_SET);
+    SW_I2C_Delay();
+    HAL_GPIO_WritePin(SW_I2C_PORT, SW_SCL_PIN, GPIO_PIN_RESET);
+}
+
+void SW_I2C_WriteReg(uint8_t addr, uint8_t reg, uint8_t data) {
+    SW_I2C_Start();
+    SW_I2C_WriteByte(addr);
+    SW_I2C_WriteByte(reg);
+    SW_I2C_WriteByte(data);
+    SW_I2C_Stop();
+}
+
+void SW_I2C_WriteBuffer(uint8_t addr, uint8_t reg, uint8_t* data, size_t len) {
+    SW_I2C_Start();
+    SW_I2C_WriteByte(addr);
+    SW_I2C_WriteByte(reg);
+    for(size_t i=0; i<len; i++) {
+        SW_I2C_WriteByte(data[i]);
+    }
+    SW_I2C_Stop();
+}
+
 void ssd1306_Reset(void) {
-    /* for I2C - do nothing */
+    /* configure PB6 and PB7 as Push-Pull */
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = SW_SCL_PIN | SW_SDA_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(SW_I2C_PORT, &GPIO_InitStruct);
 }
 
 // Send a byte to the command register
 void ssd1306_WriteCommand(uint8_t byte) {
-    HAL_I2C_Mem_Write(&SSD1306_I2C_PORT, SSD1306_I2C_ADDR, 0x00, 1, &byte, 1, HAL_MAX_DELAY);
+    SW_I2C_WriteReg(SSD1306_I2C_ADDR, 0x00, byte);
 }
 
 // Send data
 void ssd1306_WriteData(uint8_t* buffer, size_t buff_size) {
-    HAL_I2C_Mem_Write(&SSD1306_I2C_PORT, SSD1306_I2C_ADDR, 0x40, 1, buffer, buff_size, HAL_MAX_DELAY);
+    SW_I2C_WriteBuffer(SSD1306_I2C_ADDR, 0x40, buffer, buff_size);
 }
 
 #elif defined(SSD1306_USE_SPI)
