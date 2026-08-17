@@ -663,14 +663,14 @@
       __HAL_RCC_GPIOA_CLK_ENABLE();
       __HAL_RCC_GPIOB_CLK_ENABLE();
 
-      /*Configure GPIO pins : PB12 PB13 PB14 */
-      GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14;
+      /*Configure GPIO pins : PB12 PB13 PB15 */
+      GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_15;
       GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
       GPIO_InitStruct.Pull = GPIO_PULLUP;
       HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-      /*Configure GPIO pin : PB15 (KY-040 DT Pin) */
-      GPIO_InitStruct.Pin = GPIO_PIN_15;
+      /*Configure GPIO pin : PB14 (KY-040 DT Pin) */
+      GPIO_InitStruct.Pin = GPIO_PIN_14;
       GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
       GPIO_InitStruct.Pull = GPIO_PULLUP;
       HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
@@ -723,11 +723,11 @@
             }
         }
 
-        // 3. Xoay Núm KY-040 (CLK - PB14 Falling Edge) ➔ +10s hoặc -10s
-        if (GPIO_Pin == GPIO_PIN_14) {
+        // 3. Xoay Núm KY-040 (CLK - PB15 Falling Edge) ➔ +10s hoặc -10s
+        if (GPIO_Pin == GPIO_PIN_15) {
             if ((current_time - last_encoder_time) > 35) { // Chống dội cơ khí 35ms
-                // Đọc chân DT (PB15) để xác định chiều xoay
-                if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == GPIO_PIN_SET) {
+                // Đọc chân DT (PB14) để xác định chiều xoay
+                if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14) == GPIO_PIN_SET) {
                     // Xoay theo chiều kim đồng hồ (CW) ➔ Tăng 10s mỗi nấc
                     timer_seconds += 10;
                     if (timer_seconds > 36000) timer_seconds = 36000; // Tối đa 10 tiếng
