@@ -59,12 +59,22 @@
         STATE_SOLID,     // 1. MÀU TRẮNG TĨNH 100% (Solid White - All 3 LEDs PA6, PA7, PB0)
         STATE_BREATHING, // 2. THỞ MÀU TRẮNG (White Breathing - Gamma 2.2)
         STATE_RAINBOW,   // 3. CẦU VỒNG 6 GIAI ĐOẠN (Rainbow Spectrum)
-        STATE_SLEEP      // 4. TẮT TẤT CẢ (Sleep Mode)
+        STATE_CUSTOM,    // 4. MÀU TỰ CHỌN TỪ WEB (Color Picker)
+        STATE_SLEEP      // 5. TẮT TẤT CẢ (Sleep Mode)
     } SystemState;
 
     SystemState current_state = STATE_SOLID;
     uint8_t mode_changed_flag = 1;
     uint8_t timer_pressed_flag = 0; // Thêm cờ cho nút Hẹn giờ
+    volatile uint32_t timer_seconds = 0; // Thời gian hẹn giờ tắt (giây)
+    volatile uint8_t timer_active = 0;    // 1: Đang hẹn giờ, 0: Tắt hẹn giờ
+    uint8_t timer_display_update = 0;     // Cờ cập nhật giao diện hiển thị Timer
+    uint32_t last_countdown_time = 0;     // Thời điểm đếm 1s
+    uint8_t custom_r = 255;
+    uint8_t custom_g = 255;
+    uint8_t custom_b = 255;
+    char uart_rx_buf[32];
+    uint8_t uart_rx_idx = 0;
     int16_t breath_val = 0;
     int8_t breath_step = 15;
     uint8_t rx_byte = 0; // Biến nhận dữ liệu từ Terminal qua UART
@@ -138,7 +148,7 @@
       HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2); // Kênh Xanh lá (PA7)
       HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3); // Kênh Xanh dương (PB0)
 
-      // Bật ADC1 để đọc biến trở
+      // Bật ADC1 để đọc biến trở PA1
       HAL_ADC_Start(&hadc1);
 
       // Bật ngắt nhận dữ liệu từ Terminal qua UART1
@@ -157,12 +167,9 @@
       ssd1306_UpdateScreen();
 
       char startup_msg[] = "\r\n==================================================\r\n"
-                           "  HE THONG DEN RGB MOOD LAMP - DIEU KHIEN TERMINAL\r\n"
-                           "    Go '1': Nac 1 - MAU TRANG TINH (Solid White 100%)\r\n"
-                           "    Go '2': Nac 2 - THO MAU TRANG (White Breathing Gamma 2.2)\r\n"
-                           "    Go '3': Nac 3 - CAU VONG 6 GIAI DOAN (Rainbow Spectrum)\r\n"
-                           "    Go '0': Nac 4 - TAT HET DEN (Sleep Mode)\r\n"
-                           "    Go 'n' hoac Space: CHUYEN NAC TIEP THEO\r\n"
+                           "  HE THONG DEN RGB MOOD LAMP - POTENTIOMETER & TIMER\r\n"
+                           "    Bien tro PA1: Chinh do sang den 0% - 100%\r\n"
+                           "    KY-040 (PB13,PB14,PB15): Hen gio 10s moi nac\r\n"
                            "==================================================\r\n";
       HAL_UART_Transmit(&huart1, (uint8_t*)startup_msg, strlen(startup_msg), 200);
       /* USER CODE END 2 */
@@ -177,7 +184,8 @@
         uint32_t now = HAL_GetTick();
 
         // ==========================================
-        // ĐỌC BIẾN TRỞ VÀ QUY ĐỔI SANG max_bright (ÉP QUÉT ADC CHO PROTEUS)
+        // 0. ĐỌC BIẾN TRỞ PA1 ĐIỀU CHỈNH ĐỘ SÁNG ĐÈN (ADC1)
+        // ==========================================
         HAL_ADC_Stop(&hadc1);
         HAL_ADC_Start(&hadc1);
         HAL_ADC_PollForConversion(&hadc1, 10);
@@ -215,32 +223,76 @@
                     ssd1306_WriteString("3. RAINBOW", Font_7x10, White);
                     break;
                 }
+                case STATE_CUSTOM: {
+                    char msg_custom[64];
+                    snprintf(msg_custom, sizeof(msg_custom), "Nac 4: CUSTOM RGB (%d,%d,%d)\r\n", custom_r, custom_g, custom_b);
+                    HAL_UART_Transmit(&huart1, (uint8_t*)msg_custom, strlen(msg_custom), 100);
+                    ssd1306_SetCursor(0, 20);
+                    char oled_custom[32];
+                    snprintf(oled_custom, sizeof(oled_custom), "RGB:%d,%d,%d", custom_r, custom_g, custom_b);
+                    ssd1306_WriteString(oled_custom, Font_7x10, White);
+                    break;
+                }
                 case STATE_SLEEP: {
-                    char msg_sleep[] = "Nac 4: SLEEP (TAT HET DEN)\r\n";
+                    char msg_sleep[] = "Nac 0: SLEEP (TAT HET DEN)\r\n";
                     HAL_UART_Transmit(&huart1, (uint8_t*)msg_sleep, strlen(msg_sleep), 100);
                     ssd1306_SetCursor(0, 20);
-                    ssd1306_WriteString("4. SLEEP OFF", Font_7x10, White);
+                    ssd1306_WriteString("0. SLEEP OFF", Font_7x10, White);
                     break;
                 }
             }
+
+            // Vẽ luôn dòng trạng thái Timer lên OLED khi chuyển chế độ
+            ssd1306_SetCursor(0, 45);
+            char init_t_buf[32];
+            if (timer_active) {
+                uint32_t min = timer_seconds / 60;
+                uint32_t sec = timer_seconds % 60;
+                snprintf(init_t_buf, sizeof(init_t_buf), "Timer: %02lu:%02lu  ", (unsigned long)min, (unsigned long)sec);
+            } else {
+                snprintf(init_t_buf, sizeof(init_t_buf), "Timer: OFF    ");
+            }
+            ssd1306_WriteString(init_t_buf, Font_7x10, White);
+
             ssd1306_UpdateScreen();
         }
 
-        // --- ĐOẠN XỬ LÝ VẼ OLED CHO NÚT TIMER ---
-        if (timer_pressed_flag == 1) {
-            timer_pressed_flag = 0; // Xóa cờ để không in liên tục
+        // ==========================================
+        // 2. BỘ ĐẾM NGƯỢC HẸN GIỜ TỰ ĐỘNG TẮT ĐÈN (COUNTDOWN TIMER)
+        // ==========================================
+        if (timer_active && (now - last_countdown_time >= 1000)) {
+            last_countdown_time = now;
+            if (timer_seconds > 0) {
+                timer_seconds--;
+                timer_display_update = 1;
 
-            ssd1306_Fill(Black); // Xóa màn hình cũ
+                // Khi hết giờ đếm ngược -> TẮT TOÀN BỘ ĐÈN LED
+                if (timer_seconds == 0) {
+                    timer_active = 0;
+                    current_state = STATE_SLEEP; // Chuyển về chế độ ngủ
+                    mode_changed_flag = 1;
 
-            ssd1306_SetCursor(10, 10);
-            ssd1306_WriteString("TIMER MODE", Font_11x18, White); // In chữ to
-
-            ssd1306_SetCursor(25, 35);
-            ssd1306_WriteString("Da hen gio!", Font_7x10, White); // In chữ nhỏ
-
-            ssd1306_UpdateScreen(); // Đẩy dữ liệu ra màn hình
+                    char msg_end[] = "\r\n[TIMER] HET GIO HEN! -> TU DONG TAT DEN (SLEEP MODE)\r\n";
+                    HAL_UART_Transmit(&huart1, (uint8_t*)msg_end, strlen(msg_end), 100);
+                }
+            }
         }
-        // ----------------------------------------
+
+        // Cập nhật trạng thái Timer lên OLED khi xoay núm hoặc đếm ngược
+        if (timer_display_update) {
+            timer_display_update = 0;
+            ssd1306_SetCursor(0, 45);
+            char t_buf[32];
+            if (timer_active) {
+                uint32_t min = timer_seconds / 60;
+                uint32_t sec = timer_seconds % 60;
+                snprintf(t_buf, sizeof(t_buf), "Timer: %02lu:%02lu  ", (unsigned long)min, (unsigned long)sec);
+            } else {
+                snprintf(t_buf, sizeof(t_buf), "Timer: OFF    ");
+            }
+            ssd1306_WriteString(t_buf, Font_7x10, White);
+            ssd1306_UpdateScreen();
+        }
 
         // 2. Điều khiển PWM theo Chế độ (Độ sáng MAX 100% Cố định)
         switch(current_state) {
@@ -294,7 +346,18 @@
                 break;
             }
 
-            case STATE_SLEEP: // NẤC 4: TẮT TẤT CẢ
+            case STATE_CUSTOM: { // NẤC 4: MÀU TỰ CHỌN TỪ WEB COLOR PICKER
+                uint16_t eff_bright = (max_bright == 0) ? 999 : max_bright;
+                uint16_t pwm_r = (uint16_t)(((uint32_t)custom_r * eff_bright) / 255);
+                uint16_t pwm_g = (uint16_t)(((uint32_t)custom_g * eff_bright) / 255);
+                uint16_t pwm_b = (uint16_t)(((uint32_t)custom_b * eff_bright) / 255);
+                __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, pwm_r); // PA6 (Đỏ)
+                __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, pwm_g); // PA7 (Xanh lá)
+                __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, pwm_b); // PB0 (Xanh dương)
+                break;
+            }
+
+            case STATE_SLEEP: // NẤC 0: TẮT TẤT CẢ
                 __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
                 __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
                 __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0);
@@ -440,24 +503,30 @@
 
       /* USER CODE END TIM2_Init 0 */
 
-      TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+      TIM_Encoder_InitTypeDef sConfig = {0};
       TIM_MasterConfigTypeDef sMasterConfig = {0};
 
       /* USER CODE BEGIN TIM2_Init 1 */
 
       /* USER CODE END TIM2_Init 1 */
       htim2.Instance = TIM2;
-      htim2.Init.Prescaler = 71;
+      htim2.Init.Prescaler = 0;
       htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
       htim2.Init.Period = 65535;
       htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
       htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-      if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-      {
-        Error_Handler();
-      }
-      sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-      if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+
+      sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
+      sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+      sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+      sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+      sConfig.IC1Filter = 10; // Bộ lọc khử nhiễu phần cứng cho Encoder KY-040
+      sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+      sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+      sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+      sConfig.IC2Filter = 10;
+
+      if (HAL_TIM_Encoder_Init(&htim2, &sConfig) != HAL_OK)
       {
         Error_Handler();
       }
@@ -594,9 +663,15 @@
       __HAL_RCC_GPIOA_CLK_ENABLE();
       __HAL_RCC_GPIOB_CLK_ENABLE();
 
-      /*Configure GPIO pins : PB12 PB13 */
-      GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_13;
+      /*Configure GPIO pins : PB12 PB13 PB14 */
+      GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14;
       GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+      GPIO_InitStruct.Pull = GPIO_PULLUP;
+      HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+      /*Configure GPIO pin : PB15 (KY-040 DT Pin) */
+      GPIO_InitStruct.Pin = GPIO_PIN_15;
+      GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
       GPIO_InitStruct.Pull = GPIO_PULLUP;
       HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
@@ -620,8 +695,9 @@
         uint32_t current_time = HAL_GetTick();
         static uint32_t last_pb12_time = 0;
         static uint32_t last_pb13_time = 0;
+        static uint32_t last_encoder_time = 0;
 
-        // Xử lý nút Đổi chế độ (PB12) - Chống dội 300ms chính xác 100%
+        // 1. Nút Đổi chế độ (PB12) - Chống dội 300ms
         if (GPIO_Pin == GPIO_PIN_12) {
             if ((current_time - last_pb12_time) > 300) {
                 current_state++;
@@ -633,45 +709,121 @@
             }
         }
 
-        // Xử lý nút Hẹn giờ (PB13)
+        // 2. Nút Nhấn trên núm xoay KY-040 (SW - PB13) ➔ TẮT / HỦY HẸN GIỜ
         if (GPIO_Pin == GPIO_PIN_13) {
             if ((current_time - last_pb13_time) > 300) {
-                char msg_timer[] = "-> Nut Hen Gio (PB13) vua duoc nhan!\r\n";
-                HAL_UART_Transmit(&huart1, (uint8_t*)msg_timer, strlen(msg_timer), 100);
+                timer_seconds = 0;
+                timer_active = 0;
+                timer_display_update = 1;
 
-                timer_pressed_flag = 1; // --- ĐÃ THÊM CỜ CHỖ NÀY ---
+                char msg_cancel[] = "[TIMER] Da tat / huy hen gio!\r\n";
+                HAL_UART_Transmit(&huart1, (uint8_t*)msg_cancel, strlen(msg_cancel), 100);
 
                 last_pb13_time = current_time;
             }
         }
+
+        // 3. Xoay Núm KY-040 (CLK - PB14 Falling Edge) ➔ +10s hoặc -10s
+        if (GPIO_Pin == GPIO_PIN_14) {
+            if ((current_time - last_encoder_time) > 35) { // Chống dội cơ khí 35ms
+                // Đọc chân DT (PB15) để xác định chiều xoay
+                if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == GPIO_PIN_SET) {
+                    // Xoay theo chiều kim đồng hồ (CW) ➔ Tăng 10s mỗi nấc
+                    timer_seconds += 10;
+                    if (timer_seconds > 36000) timer_seconds = 36000; // Tối đa 10 tiếng
+                    timer_active = 1;
+                } else {
+                    // Xoay ngược chiều kim đồng hồ (CCW) ➔ Giảm 10s mỗi nấc
+                    if (timer_seconds >= 10) {
+                        timer_seconds -= 10;
+                    } else {
+                        timer_seconds = 0;
+                    }
+                    if (timer_seconds == 0) {
+                        timer_active = 0;
+                    }
+                }
+                timer_display_update = 1;
+
+                char msg_enc[48];
+                snprintf(msg_enc, sizeof(msg_enc), "[TIMER] Hen gio: %lus (%02lum%02lus)\r\n", 
+                         (unsigned long)timer_seconds, 
+                         (unsigned long)(timer_seconds / 60), 
+                         (unsigned long)(timer_seconds % 60));
+                HAL_UART_Transmit(&huart1, (uint8_t*)msg_enc, strlen(msg_enc), 100);
+
+                last_encoder_time = current_time;
+            }
+        }
     }
 
-    // Callback ngắt nhận dữ liệu từ Terminal qua UART (Điều khiển LED bằng cách gõ phím)
+    // Callback ngắt nhận dữ liệu từ Terminal / Web Serial qua UART
     void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
         if (huart->Instance == USART1) {
-            // Phản hồi ký tự gõ lại Terminal (Echo back)
-            HAL_UART_Transmit(&huart1, &rx_byte, 1, 10);
-
-            if (rx_byte == '1' || rx_byte == 'w' || rx_byte == 'W') {
-                current_state = STATE_SOLID; // 1. MÀU TRẮNG TĨNH 100%
-                mode_changed_flag = 1;
-            } else if (rx_byte == '2' || rx_byte == 'b' || rx_byte == 'B') {
-                current_state = STATE_BREATHING; // 2. THỞ MÀU TRẮNG (GAMMA 2.2)
-                mode_changed_flag = 1;
-            } else if (rx_byte == '3' || rx_byte == 'r' || rx_byte == 'R') {
-                current_state = STATE_RAINBOW; // 3. CẦU VỒNG 6 GIAI ĐOẠN
-                mode_changed_flag = 1;
-            } else if (rx_byte == '0' || rx_byte == 's' || rx_byte == 'S') {
-                current_state = STATE_SLEEP; // 4. TẮT TẤT CẢ
-                mode_changed_flag = 1;
-            } else if (rx_byte == 'n' || rx_byte == 'N' || rx_byte == ' ' || rx_byte == '\r' || rx_byte == '\n') {
-                current_state++;
-                if (current_state > STATE_SLEEP) current_state = STATE_SOLID;
-                mode_changed_flag = 1;
-            }
-
-            // Tiếp tục đăng ký ngắt nhận ký tự tiếp theo
+            uint8_t ch = rx_byte;
+            // Đăng ký nhận ngay lập tức byte tiếp theo trước khi xử lý logic để không bị miss xung
             HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
+
+            if (ch == '\n' || ch == '\r') {
+                if (uart_rx_idx > 0) {
+                    uart_rx_buf[uart_rx_idx] = '\0';
+
+                    // 1. Gói tin màu RGB dạng "C:R,G,B" (ví dụ C:255,100,50)
+                    if ((uart_rx_buf[0] == 'C' || uart_rx_buf[0] == 'c') && uart_rx_buf[1] == ':') {
+                        int r = 0, g = 0, b = 0;
+                        if (sscanf(&uart_rx_buf[2], "%d,%d,%d", &r, &g, &b) == 3) {
+                            custom_r = (uint8_t)(r > 255 ? 255 : (r < 0 ? 0 : r));
+                            custom_g = (uint8_t)(g > 255 ? 255 : (g < 0 ? 0 : g));
+                            custom_b = (uint8_t)(b > 255 ? 255 : (b < 0 ? 0 : b));
+                            current_state = STATE_CUSTOM;
+                            mode_changed_flag = 1;
+                        }
+                    }
+                    // 2. Gói tin màu Hex dạng "#RRGGBB"
+                    else if (uart_rx_buf[0] == '#') {
+                        unsigned int rgb = 0;
+                        if (sscanf(&uart_rx_buf[1], "%x", &rgb) == 1) {
+                            custom_r = (rgb >> 16) & 0xFF;
+                            custom_g = (rgb >> 8) & 0xFF;
+                            custom_b = rgb & 0xFF;
+                            current_state = STATE_CUSTOM;
+                            mode_changed_flag = 1;
+                        }
+                    }
+                    // 3. Gói tin chọn chế độ dạng "M:x"
+                    else if ((uart_rx_buf[0] == 'M' || uart_rx_buf[0] == 'm') && uart_rx_buf[1] == ':') {
+                        char m = uart_rx_buf[2];
+                        if (m == '1') current_state = STATE_SOLID;
+                        else if (m == '2') current_state = STATE_BREATHING;
+                        else if (m == '3') current_state = STATE_RAINBOW;
+                        else if (m == '4') current_state = STATE_CUSTOM;
+                        else if (m == '0') current_state = STATE_SLEEP;
+                        mode_changed_flag = 1;
+                    }
+                    // 4. Phím lệnh đơn lẻ: '1', '2', '3', '4', '0', 'w', 'b', 'r', 's', 'n', space
+                    else {
+                        char c = uart_rx_buf[0];
+                        if (c == '1' || c == 'w' || c == 'W') { current_state = STATE_SOLID; mode_changed_flag = 1; }
+                        else if (c == '2' || c == 'b' || c == 'B') { current_state = STATE_BREATHING; mode_changed_flag = 1; }
+                        else if (c == '3' || c == 'r' || c == 'R') { current_state = STATE_RAINBOW; mode_changed_flag = 1; }
+                        else if (c == '4' || c == 'c' || c == 'C') { current_state = STATE_CUSTOM; mode_changed_flag = 1; }
+                        else if (c == '0' || c == 's' || c == 'S') { current_state = STATE_SLEEP; mode_changed_flag = 1; }
+                        else if (c == 'n' || c == 'N' || c == ' ') {
+                            current_state++;
+                            if (current_state > STATE_SLEEP) current_state = STATE_SOLID;
+                            mode_changed_flag = 1;
+                        }
+                    }
+                    uart_rx_idx = 0;
+                }
+            } else {
+                // Thu thập các ký tự hợp lệ vào bộ đệm nhận gói tin
+                if (ch >= 32 && ch <= 126) {
+                    if (uart_rx_idx < sizeof(uart_rx_buf) - 1) {
+                        uart_rx_buf[uart_rx_idx++] = (char)ch;
+                    }
+                }
+            }
         }
     }
 

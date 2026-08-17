@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RGB Mood Lamp - Glassmorphism Controller</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Animated Ambient Light Orbs (Behind Glass) -->
+    <div class="ambient-bg">
+        <div class="ambient-orb orb-1"></div>
+        <div class="ambient-orb orb-2"></div>
+        <div class="ambient-orb orb-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Glassmorphism Header -->
+        <header class="glass-header">
+            <div class="brand">
+                <div class="logo-glass-box" id="status-orb">
+                    <i data-lucide="lightbulb" class="icon-brand"></i>
+                </div>
+                <div class="brand-text">
+                    <h1>RGB Mood Lamp</h1>
+                    <p class="subtitle">STM32F103C8T6 Glassmorphism Dashboard</p>
+                </div>
+            </div>
+            
+            <div class="connection-bar">
+                <div class="status-badge disconnected" id="connection-badge">
+                    <span class="status-dot"></span>
+                    <span id="connection-text">Chưa kết nối</span>
+                </div>
+                <button id="btn-connect" class="glass-btn btn-connect">
+                    <i data-lucide="usb" class="btn-icon"></i>
+                    <span id="btn-connect-label">Kết nối STM32</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Dashboard Glass Grid -->
+        <main class="dashboard-grid">
+            <!-- Left Column: Glass Color Picker -->
+            <section class="glass-card color-card">
+                <div class="card-header">
+                    <div class="header-title">
+                        <i data-lucide="palette" class="section-icon"></i>
+                        <h2>Bảng Màu Tùy Chỉnh</h2>
+                    </div>
+                    <span class="glass-pill">Live Sync</span>
+                </div>
+                
+                <!-- Circular Color Preview -->
+                <div class="preview-wrapper">
+                    <div class="color-preview-circle" id="color-preview">
+                        <div class="hex-badge" id="hex-val">#FFFFFF</div>
+                    </div>
+                </div>
+
+                <!-- Native Color Button / Trigger -->
+                <div class="picker-action-row">
+                    <label for="native-color-picker" class="glass-picker-btn">
+                        <i data-lucide="pipette" class="btn-icon-sm"></i>
+                        <span>Mở bảng chọn màu chi tiết</span>
+                        <input type="color" id="native-color-picker" value="#ffffff" class="native-picker-input">
+                    </label>
+                </div>
+
+                <!-- RGB Sliders -->
+                <div class="rgb-sliders">
+                    <div class="slider-row">
+                        <div class="slider-meta">
+                            <span class="color-pill pill-red">R</span>
+                            <span class="slider-title">Đỏ (Red)</span>
+                            <span class="slider-value" id="r-val">255</span>
+                        </div>
+                        <input type="range" id="slider-r" min="0" max="255" value="255" class="slider slider-r">
+                    </div>
+
+                    <div class="slider-row">
+                        <div class="slider-meta">
+                            <span class="color-pill pill-green">G</span>
+                            <span class="slider-title">Xanh lá (Green)</span>
+                            <span class="slider-value" id="g-val">255</span>
+                        </div>
+                        <input type="range" id="slider-g" min="0" max="255" value="255" class="slider slider-g">
+                    </div>
+
+                    <div class="slider-row">
+                        <div class="slider-meta">
+                            <span class="color-pill pill-blue">B</span>
+                            <span class="slider-title">Xanh dương (Blue)</span>
+                            <span class="slider-value" id="b-val">255</span>
+                        </div>
+                        <input type="range" id="slider-b" min="0" max="255" value="255" class="slider slider-b">
+                    </div>
+                </div>
+
+                <!-- Quick Swatches -->
+                <div class="swatches-wrap">
+                    <span class="swatches-label">Màu mẫu nhanh:</span>
+                    <div class="swatches-grid">
+                        <button class="swatch" style="--swatch-color: #FFFFFF" data-color="#FFFFFF" title="Trắng"></button>
+                        <button class="swatch" style="--swatch-color: #FEE2E2" data-color="#FEE2E2" title="Hồng Pastel"></button>
+                        <button class="swatch" style="--swatch-color: #FEF08A" data-color="#FEF08A" title="Vàng Ấm"></button>
+                        <button class="swatch" style="--swatch-color: #F87171" data-color="#F87171" title="Đỏ"></button>
+                        <button class="swatch" style="--swatch-color: #FB923C" data-color="#FB923C" title="Cam"></button>
+                        <button class="swatch" style="--swatch-color: #4ADE80" data-color="#4ADE80" title="Xanh Lá"></button>
+                        <button class="swatch" style="--swatch-color: #38BDF8" data-color="#38BDF8" title="Xanh Da Trời"></button>
+                        <button class="swatch" style="--swatch-color: #A855F7" data-color="#A855F7" title="Tím"></button>
+                    </div>
+                </div>
+
+                <!-- Apply Color Action Button -->
+                <button id="btn-apply-color" class="glass-btn btn-primary full-width">
+                    <i data-lucide="send" class="btn-icon"></i>
+                    <span>Áp dụng màu đã chọn</span>
+                </button>
+            </section>
+
+            <!-- Right Column: Mood Modes & Terminal Console -->
+            <div class="right-stack">
+                <!-- Modes Section -->
+                <section class="glass-card modes-card">
+                    <div class="card-header">
+                        <div class="header-title">
+                            <i data-lucide="sliders" class="section-icon"></i>
+                            <h2>Chế Độ Hoạt Động</h2>
+                        </div>
+                    </div>
+                    
+                    <div class="modes-grid">
+                        <button class="mode-btn active" data-mode="1" id="mode-1">
+                            <div class="mode-icon-circle">
+                                <i data-lucide="sun"></i>
+                            </div>
+                            <div class="mode-content">
+                                <h3>Màu Trắng Tĩnh</h3>
+                                <p>Solid White 100%</p>
+                            </div>
+                        </button>
+
+                        <button class="mode-btn" data-mode="2" id="mode-2">
+                            <div class="mode-icon-circle">
+                                <i data-lucide="activity"></i>
+                            </div>
+                            <div class="mode-content">
+                                <h3>Thở Màu Trắng</h3>
+                                <p>Breathing White (Gamma 2.2)</p>
+                            </div>
+                        </button>
+
+                        <button class="mode-btn" data-mode="3" id="mode-3">
+                            <div class="mode-icon-circle">
+                                <i data-lucide="sparkles"></i>
+                            </div>
+                            <div class="mode-content">
+                                <h3>Cầu Vồng 6 Màu</h3>
+                                <p>Rainbow Spectrum</p>
+                            </div>
+                        </button>
+
+                        <button class="mode-btn" data-mode="custom" id="mode-custom">
+                            <div class="mode-icon-circle">
+                                <i data-lucide="palette"></i>
+                            </div>
+                            <div class="mode-content">
+                                <h3>Màu Tự Chọn</h3>
+                                <p>Custom RGB Color</p>
+                            </div>
+                        </button>
+
+                        <button class="mode-btn mode-sleep" data-mode="0" id="mode-0">
+                            <div class="mode-icon-circle">
+                                <i data-lucide="moon"></i>
+                            </div>
+                            <div class="mode-content">
+                                <h3>Chế Độ Ngủ</h3>
+                                <p>Tắt toàn bộ đèn LED</p>
+                            </div>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Serial Console Terminal -->
+                <section class="glass-card console-card">
+                    <div class="card-header">
+                        <div class="header-title">
+                            <i data-lucide="terminal" class="section-icon"></i>
+                            <h2>Nhật Ký Dữ Liệu UART</h2>
+                        </div>
+                        <button id="btn-clear-console" class="glass-btn btn-sm btn-ghost">
+                            <i data-lucide="trash-2" class="btn-icon-xs"></i>
+                            <span>Xóa</span>
+                        </button>
+                    </div>
+                    <div class="glass-terminal-box" id="terminal-output">
+                        <div class="term-line info">[SYS] Trình điều khiển Web Serial đã sẵn sàng.</div>
+                        <div class="term-line info">[SYS] Kết nối với cổng COM STM32 ở tốc độ 115200 baud.</div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
