@@ -103,63 +103,7 @@ The web interface is engineered with a Glassmorphism aesthetic and connects dire
 
 ---
 
-## 6. Repository Directory Structure
-
-```text
-├── Core/
-│   ├── Inc/
-│   │   ├── main.h
-│   │   ├── ssd1306.h
-│   │   ├── ssd1306_fonts.h
-│   │   ├── stm32f1xx_hal_conf.h
-│   │   └── stm32f1xx_it.h
-│   └── Src/
-│       ├── main.c              # Core logic, State Machine, Timer, UART parser
-│       ├── ssd1306.c           # SSD1306 OLED display driver
-│       ├── ssd1306_fonts.c     # Display font bitmaps
-│       ├── stm32f1xx_hal_msp.c # MCU peripheral MSP initialization
-│       └── stm32f1xx_it.c      # EXTI and UART interrupt service routines
-├── Drivers/                    # STM32F1xx HAL Driver & CMSIS libraries
-├── cmake/                      # CMake build definitions and toolchain scripts
-├── docs/                       # Documentation and Proteus simulation files
-├── web/
-│   ├── index.html              # Glassmorphism Web Serial Dashboard UI
-│   ├── style.css               # Frosted glass styling and ambient animations
-│   ├── app.js                  # Web Serial API handler and line stream buffer
-│   └── README.md               # Web Dashboard documentation
-└── README.md                   # Project overview and technical specification
-```
-
----
-
-## 7. Build and Flash Instructions
-
-### Prerequisites
-- **Toolchain:** Arm GNU Toolchain (`arm-none-eabi-gcc` 14.x or later)
-- **Build System:** CMake (>= 3.22) and Ninja
-- **Programmer:** ST-Link V2 and STM32CubeProgrammer CLI
-
-### Compilation Steps
-
-1. **Configure the build using CMake Presets:**
-   ```bash
-   cmake --preset Debug
-   ```
-
-2. **Compile the binary targets:**
-   ```bash
-   cmake --build --preset Debug
-   ```
-   Compiled output artifacts will be generated in `build/Debug/STM32.bin` and `build/Debug/STM32.elf`.
-
-3. **Flash the firmware via SWD using STM32CubeProgrammer:**
-   ```bash
-   STM32_Programmer_CLI -c port=SWD mode=UR -w build/Debug/STM32.bin 0x08000000 -v -rst
-   ```
-
----
-
-## 8. Web Controller Quick Start
+## 6. Web Controller Quick Start
 
 1. Open Google Chrome, Microsoft Edge, or any Web Serial-compatible browser.
 2. Open the file `web/index.html`.
@@ -168,7 +112,7 @@ The web interface is engineered with a Glassmorphism aesthetic and connects dire
 
 ---
 
-## 9. Authors & Contributors
+## 7. Authors & Contributors
 
 - **Dang Quang Minh**
 - **Duong Minh Trong**
