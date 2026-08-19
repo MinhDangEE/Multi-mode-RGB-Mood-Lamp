@@ -1,106 +1,109 @@
-# Multi-mode RGB Mood Lamp with Auto-off Timer based on STM32F103C8T6
+# Multi-Mode RGB Mood Lamp with Auto-Off Timer on STM32F103C8T6
 
-He thong den trang tri thong minh da che do (Multi-mode RGB Mood Lamp) tich hop hen gio tu dong tat (Auto-off Timer), dieu khien do sang bang bien tro (ADC), hen gio bang encoder xoay KY-040 (EXTI), hien thi trang thai qua man hinh OLED SSD1306 va dong bo thoi gian thuc voi giao dien Web Serial Dashboard.
-
----
-
-## 1. Tong quan du an
-
-Du an duoc xay dung tren nen tang vi dieu khien STM32F103C8T6 (ARM Cortex-M3), ket hop cac ngoai vi phan cung bao gom Timer PWM, ADC, ngat ngoai EXTI, I2C va UART nham tao nen mot he thong chieu sang trang tri hoan chinh voi kha nang tuong tac truc quan:
-
-- Dieu khien mau sac LED RGB thong qua 3 kenh PWM 16-bit doc lap.
-- Tich hop 5 che do hoat dong: Mau trang tinh, Tho mau trang (Gamma 2.2), Cau vong 6 giai doan, Mau tu chon (Custom RGB), va Che do ngu (Sleep Mode).
-- Chinh do sang tong the bang bien tro xoay 10k (ADC1).
-- Hen gio tu dong tat den bang module encoder KY-040 voi buoc nhay 10 giay moi nac, ho tro huy hen gio nhanh bang nut nhan tich hop.
-- Hien thi truc quan thong tin che do va bo dem nguoc tren man hinh OLED SSD1306 128x64.
-- Giao dien Web Serial Controller phong cach Glassmorphism, cho phep chon mau truc tiep tu Color Picker va truyen nhan du lieu UART 115200 baud thoi gian thuc.
+An intelligent embedded ambient lighting controller developed on the STM32F103C8T6 (ARM Cortex-M3) microcontroller. The system features 3-channel hardware Timer PWM for dynamic color generation, ADC-based analog brightness regulation, a KY-040 rotary encoder for auto-off countdown scheduling (10s increments), an SSD1306 I2C OLED display for real-time status monitoring, and a Glassmorphism Web Serial Dashboard for real-time color picking and control via UART (115200 baud).
 
 ---
 
-## 2. So do ket noi phan cung (Pinout Configuration)
+## 1. Project Overview
 
-| Thiet bi / Module | Chan tren Module | Chan tren STM32 | Chuc nang ngoai vi |
-| :--- | :--- | :--- | :--- |
-| **LED RGB** | Red (Kenh Do) | PA6 | TIM3_CH1 (PWM 1kHz) |
-| | Green (Kenh Xanh la) | PA7 | TIM3_CH2 (PWM 1kHz) |
-| | Blue (Kenh Xanh duong) | PB0 | TIM3_CH3 (PWM 1kHz) |
-| | Cathode / Anode | GND / 3.3V | Cuc chung (Common Cathode/Anode) |
-| **Bien tro 10k** | Chan giua (Wiper) | PA1 | ADC1_IN1 (Doc dien ap do sang) |
-| | 2 chan ngoai | 3.3V / GND | Nguon cap dien ap chuan |
-| **Encoder KY-040** | CLK (Phase A) | PB15 | EXTI15 (Ngat suon xuong dem buoc) |
-| | DT (Phase B) | PB14 | GPIO Input (Doc chieu xoay Thuan/Nghich) |
-| | SW (Push Button) | PB13 | EXTI13 (Nut nhan Tat/Huy hen gio) |
-| | + (VCC) / GND | 3.3V / GND | Nguon cap module |
-| **Nut bam che do** | Nut bam Mode | PB12 | EXTI12 (Chuyen che do hoat dong) |
-| **OLED SSD1306** | SCL | PB6 | I2C1_SCL |
-| | SDA | PB7 | I2C1_SDA |
-| | VCC / GND | 3.3V / GND | Nguon man hinh |
-| **UART USB Bridge** | TXD (Module USB) | PA10 | USART1_RX (Nhan lenh tu PC/Web) |
-| | RXD (Module USB) | PA9 | USART1_TX (Truyen log len PC/Web) |
-| | GND | GND | Mass chung |
-| **ST-Link V2** | SWDIO / SWCLK / GND | PA13 / PA14 / GND | Debug va nap chuong trinh SWD |
+This project implements a multi-functional mood lamp utilizing core hardware peripherals of the STM32F103C8T6 MCU:
+
+- **16-bit Hardware Timer PWM (TIM3):** Generates 1 kHz PWM on 3 independent channels for smooth RGB color mixing and brightness fading.
+- **5 Operational Lighting Modes:** Solid White, Breathing White (Gamma 2.2 corrected), 6-Phase Rainbow Spectrum Crossfade, Custom RGB Color, and Sleep / Standby Mode.
+- **Analog Brightness Control (ADC1):** Continuously reads a 10k potentiometer on PA1 to scale the overall luminous intensity from 0% to 100%.
+- **KY-040 Rotary Encoder Timer (EXTI):** Configured with 10-second step increments/decrements per detent click, complete with instant timer cancellation via the integrated push button.
+- **OLED Display Interface (I2C1):** Visualizes active mode names, custom RGB coordinates, and countdown timer in real time on a 128x64 SSD1306 screen.
+- **Glassmorphism Web Serial Controller:** Web-based control panel built on the Web Serial API (Chrome / Edge), featuring a Color Picker, discrete RGB sliders, and a Line Stream Buffered UART monitor.
 
 ---
 
-## 3. Cac che do hoat dong (Operating Modes)
+## 2. Hardware Pinout & Wiring Configuration
 
-1. **Nac 1 - Solid White (Mau trang tinh 100%):**
-   - Ba kenh mau R, G, B cung phat PWM o muc cuc dai, tao ra anh sang trang on dinh.
-   - Do sang duoc dieu chinh truc tiep thong qua bien tro PA1.
+The system is deployed on an STM32F103C8T6 "Blue Pill" board with the following pin assignments:
 
-2. **Nac 2 - Breathing White (Tho mau trang Gamma 2.2):**
-   - Hieu ung tang/giam do sang tuan hoan theo duong cong Gamma 2.2, mang lai cam giac chuyen dong anh sang tu nhien, mem mai.
-
-3. **Nac 3 - Rainbow Spectrum (Cau vong 6 giai doan):**
-   - Chuyen mau lien tuc qua 6 vung quang pho: Do -> Vang -> Xanh la -> Cyan -> Xanh duong -> Magenta -> Do.
-   - Su dung thuat toan crossfade PWM giup mau sac bien doi tuyet doi khong bi giat.
-
-4. **Nac 4 - Custom RGB (Mau tu chon tu Web):**
-   - Nhan gia tri RGB tu Web Serial Dashboard hoac Terminal qua giao thuc `C:R,G,B\n` hoac `#RRGGBB\n`.
-   - Xuat PWM chinh xac theo dung ma mau nguoi dung da chon tren bang mau.
-
-5. **Nac 0 - Sleep Mode (Che do ngu / Tat den):**
-   - Tat toan bo 3 kenh PWM (Duty Cycle = 0%).
-   - He thong tu dong chuyen ve che do nay khi bo dem nguoc hen gio ket thuc.
-
----
-
-## 4. Co che hen gio (Auto-off Countdown Timer)
-
-- **Xoay theo chieu kim dong ho (CW):** Moi nac xoay tang them 10 giay vao bo nho dem hen gio (`+10s`).
-- **Xoay nguoc chieu kim dong ho (CCW):** Moi nac xoay giam di 10 giay (`-10s`). Khi giam ve 0 giay, che do hen gio tu dong tat.
-- **Nhan vao dau num xoay (SW - PB13):** Ngay lap tuc huy va tat che do hen gio (`Timer: OFF`).
-- **Tu dong dem nguoc:** He thong tu dong giam thoi gian moi 1 giay. Khi thoi gian dem ve `00:00`, he thong tu dong tat toan bo den LED va chuyen sang Sleep Mode.
-- **Hien thi thoi gian thuc:** Thoi gian hen gio duoc cap nhat dong thoi tren man hinh OLED va gui log ve Serial Monitor.
+| Peripheral / Module | Module Pin | STM32 Pin | Hardware Function | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **RGB LED** | Red Channel | PA6 | TIM3_CH1 | 1 kHz PWM output |
+| | Green Channel | PA7 | TIM3_CH2 | 1 kHz PWM output |
+| | Blue Channel | PB0 | TIM3_CH3 | 1 kHz PWM output |
+| | Common Terminal | GND / 3.3V | Common Cathode / Anode | Common Cathode default |
+| **10k Potentiometer** | Wiper (Middle) | PA1 | ADC1_IN1 | Analog voltage reading |
+| | Outer Pins | 3.3V / GND | Power Rails | Voltage divider reference |
+| **KY-040 Encoder** | CLK (Phase A) | PB15 | EXTI15 | Falling edge interrupt (step counter) |
+| | DT (Phase B) | PB14 | GPIO Input | Direction detection (CW / CCW) |
+| | SW (Push Button) | PB13 | EXTI13 | Falling edge interrupt (Timer Cancel) |
+| | + (VCC) / GND | 3.3V / GND | Power Supply | 3.3V or 5V compatible |
+| **Mode Button** | Push Button | PB12 | EXTI12 | Falling edge interrupt (Mode toggle) |
+| **SSD1306 OLED** | SCL | PB6 | I2C1_SCL | 400 kHz Fast I2C Clock |
+| | SDA | PB7 | I2C1_SDA | Fast I2C Data Line |
+| | VCC / GND | 3.3V / GND | Power Supply | Display power |
+| **USB-to-UART Bridge** | TXD (USB Bridge)| PA10 | USART1_RX | Command reception (115200 8N1) |
+| | RXD (USB Bridge)| PA9 | USART1_TX | Log transmission (115200 8N1) |
+| | GND | GND | Common Ground | Required for signal ground |
+| **ST-Link V2 Debugger**| SWDIO / SWCLK / GND | PA13 / PA14 / GND | Serial Wire Debug (SWD) | Programming and debugging |
 
 ---
 
-## 5. Giao tiep Web Serial Dashboard
+## 3. Operational Lighting Modes
 
-Giao dien dieu khien Web duoc thiet ke theo phong cach Glassmorphism ket hop cung Web Serial API:
+1. **Mode 1 - Solid White (100% Constant Intensity):**
+   - Drives all three channels (Red, Green, Blue) at maximum duty cycle to generate uniform neutral white light.
+   - Master brightness is scaled continuously via the PA1 potentiometer.
 
-- **Ket noi truc tiep:** Ket noi toi STM32 qua cong COM USB voi Baudrate 115200 (khong can cai dat driver phuc tap).
-- **Bang mau Color Picker:** Chon mau truc quan va truyen ma mau RGB thoi gian thuc.
-- **Thanh truot RGB Sliders:** Tinh chinh chi tiet tung kenh Red, Green, Blue tu 0 den 255.
-- **Nut chon che do nhanh:** Chuyen doi giua cac che do Solid, Breathing, Rainbow, Custom, Sleep chi bang mot cu nhap chuot.
-- **Serial Monitor tich hop:** Bo dem nhan dong (Line Stream Buffer) giup hien thi nhat ky du lieu tu STM32 ro rang, khong bi ngat quang hoac vo dong.
+2. **Mode 2 - Breathing White (Gamma 2.2 Corrected):**
+   - Applies a smooth periodic brightness pulse using a non-linear Gamma 2.2 correction curve to match human eye luminous sensitivity.
 
-### Giao thuc truyen nhan UART (UART Protocol)
+3. **Mode 3 - Rainbow Spectrum (6-Phase Crossfade):**
+   - Seamlessly transitions through 6 spectrum zones: Red -> Yellow -> Green -> Cyan -> Blue -> Magenta -> Red.
+   - Utilizes linear PWM crossfading for artifact-free color transitions.
 
-- **Chon che do:**
-  - `1\n` hoac `w\n`: Chuyen Nac 1 (Solid White)
-  - `2\n` hoac `b\n`: Chuyen Nac 2 (Breathing White)
-  - `3\n` hoac `r\n`: Chuyen Nac 3 (Rainbow)
-  - `4\n` hoac `c\n`: Chuyen Nac 4 (Custom Color)
-  - `0\n` hoac `s\n`: Chuyen Nac 0 (Sleep / Standby)
-  - `n\n` hoac `Space`: Chuyen sang che do tiep theo
-- **Chon mau sac tuy chinh:**
-  - `C:R,G,B\n` (vi du: `C:255,100,50\n`)
-  - `#RRGGBB\n` (vi du: `#FF6432\n`)
+4. **Mode 4 - Custom RGB Color (Web Color Picker):**
+   - Receives RGB color coordinates directly from the Web Serial Dashboard or UART Terminal via `C:R,G,B\n` or `#RRGGBB\n` packets.
+   - Directly maps RGB values (0-255) to TIM3 compare registers.
+
+5. **Mode 0 - Sleep Mode (Standby / Off):**
+   - Disables all PWM outputs (0% duty cycle) to turn off the lamp completely.
+   - The system automatically enters this mode when the auto-off timer reaches zero.
 
 ---
 
-## 6. Cau truc thu muc du an
+## 4. Auto-Off Countdown Timer Mechanism
+
+- **Clockwise Rotation (CW):** Each physical detent click adds 10 seconds to the timer memory (`+10s`).
+- **Counter-Clockwise Rotation (CCW):** Each click subtracts 10 seconds (`-10s`). Reducing the time to 0 seconds turns off the timer.
+- **Push Button Action (SW - PB13):** Instantly cancels the countdown and resets the timer (`Timer: OFF`).
+- **Automatic Countdown Execution:** A non-blocking 1-second system tick decrements the timer. When the remaining time reaches `00:00`, the system automatically transitions to **Sleep Mode (Mode 0)**, extinguishing all LEDs.
+- **Real-Time Visualization:** Remaining time (`MM:SS`) is rendered on the OLED display and transmitted via UART.
+
+---
+
+## 5. Web Serial Dashboard & UART Protocol
+
+The web interface is engineered with a Glassmorphism aesthetic and connects directly to the microcontroller through the browser's Web Serial API.
+
+### Features
+- **Direct USB Serial Connection:** Native browser-to-MCU serial communication at 115200 baud without third-party drivers.
+- **Live Color Picker:** Interactive color palette and discrete RGB sliders for real-time color syncing.
+- **Quick Preset Swatches:** Single-click selection of popular mood colors (Pastel Pink, Warm Amber, Neon Blue, Emerald, Purple).
+- **Mode Switching Cards:** Instant toggle buttons for all operating modes.
+- **Line Stream Buffered Terminal:** Prevents fragmented text and displays incoming serial telemetry neatly with timestamps.
+
+### UART Communication Protocol
+
+- **Mode Commands:**
+  - `1\n` or `w\n`: Select Mode 1 (Solid White)
+  - `2\n` or `b\n`: Select Mode 2 (Breathing White)
+  - `3\n` or `r\n`: Select Mode 3 (Rainbow Spectrum)
+  - `4\n` or `c\n`: Select Mode 4 (Custom RGB)
+  - `0\n` or `s\n`: Select Mode 0 (Sleep / Standby)
+  - `n\n` or `Space`: Step to next mode
+- **Custom Color Packets:**
+  - `C:R,G,B\n` (e.g., `C:255,100,50\n` for custom RGB)
+  - `#RRGGBB\n` (e.g., `#FF6432\n` for hex format)
+
+---
+
+## 6. Repository Directory Structure
 
 ```text
 ├── Core/
@@ -111,54 +114,54 @@ Giao dien dieu khien Web duoc thiet ke theo phong cach Glassmorphism ket hop cun
 │   │   ├── stm32f1xx_hal_conf.h
 │   │   └── stm32f1xx_it.h
 │   └── Src/
-│       ├── main.c              # Chuong trinh chinh, State Machine, Timer, UART parser
-│       ├── ssd1306.c           # Driver I2C man hinh OLED SSD1306
-│       ├── ssd1306_fonts.c     # Bo font chu hien thi
-│       ├── stm32f1xx_hal_msp.c # Khoi tao phan cung ngoai vi (MSP)
-│       └── stm32f1xx_it.c      # Trinh phuc vu ngat EXTI va UART
-├── Drivers/                    # Thu vien STM32F1xx HAL Driver & CMSIS
-├── cmake/                      # Cau hinh build he thong CMake & STM32CubeMX
-├── docs/                       # Tai lieu du an va file mo phong Proteus
+│       ├── main.c              # Core logic, State Machine, Timer, UART parser
+│       ├── ssd1306.c           # SSD1306 OLED display driver
+│       ├── ssd1306_fonts.c     # Display font bitmaps
+│       ├── stm32f1xx_hal_msp.c # MCU peripheral MSP initialization
+│       └── stm32f1xx_it.c      # EXTI and UART interrupt service routines
+├── Drivers/                    # STM32F1xx HAL Driver & CMSIS libraries
+├── cmake/                      # CMake build definitions and toolchain scripts
+├── docs/                       # Documentation and Proteus simulation files
 ├── web/
-│   ├── index.html              # Giao dien Web Serial Dashboard
-│   ├── style.css               # Dinh dang Glassmorphism va animation
-│   ├── app.js                  # Xu ly ket noi Web Serial API va truyen goi tin RGB
-│   └── README.md               # Huong dan su dung Web Dashboard
-└── README.md                   # Tai lieu huong dan tong quan du an
+│   ├── index.html              # Glassmorphism Web Serial Dashboard UI
+│   ├── style.css               # Frosted glass styling and ambient animations
+│   ├── app.js                  # Web Serial API handler and line stream buffer
+│   └── README.md               # Web Dashboard documentation
+└── README.md                   # Project overview and technical specification
 ```
 
 ---
 
-## 7. Huong dan bien dich va nap chuong trinh
+## 7. Build and Flash Instructions
 
-### Yeu cau moi truong
-- **Toolchain:** Arm GNU Toolchain (`arm-none-eabi-gcc` 14.x tro len)
-- **Build System:** CMake (>= 3.22) va Ninja
-- **Debug / Flash Tool:** ST-Link V2 va STM32CubeProgrammer CLI
+### Prerequisites
+- **Toolchain:** Arm GNU Toolchain (`arm-none-eabi-gcc` 14.x or later)
+- **Build System:** CMake (>= 3.22) and Ninja
+- **Programmer:** ST-Link V2 and STM32CubeProgrammer CLI
 
-### Cac buoc bien dich
+### Compilation Steps
 
-1. **Cau hinh du an bang CMake:**
+1. **Configure the build using CMake Presets:**
    ```bash
    cmake --preset Debug
    ```
 
-2. **Tien hanh bien dich:**
+2. **Compile the binary targets:**
    ```bash
    cmake --build --preset Debug
    ```
-   File thuc thi se duoc tao tai `build/Debug/STM32.bin` va `build/Debug/STM32.elf`.
+   Compiled output artifacts will be generated in `build/Debug/STM32.bin` and `build/Debug/STM32.elf`.
 
-3. **Nap chuong trinh xuong STM32 bang STM32CubeProgrammer:**
+3. **Flash the firmware via SWD using STM32CubeProgrammer:**
    ```bash
    STM32_Programmer_CLI -c port=SWD mode=UR -w build/Debug/STM32.bin 0x08000000 -v -rst
    ```
 
 ---
 
-## 8. Huong dan su dung Web Controller
+## 8. Web Controller Quick Start
 
-1. Mo trinh duyet Google Chrome, Microsoft Edge hoac Coc Coc tren may tinh.
-2. Mo truc tiep file `web/index.html`.
-3. Nhap vao nut **Ket noi STM32**, chon cong COM tuong ung cua mach USB-UART (toc do 115200 baud).
-4. Thao tac chon mau tren Color Picker hoac nhap cac nut che do de dieu khien den LED RGB thoi gian thuc.
+1. Open Google Chrome, Microsoft Edge, or any Web Serial-compatible browser.
+2. Open the file `web/index.html`.
+3. Click **Connect STM32** and select the active USB-to-UART COM port (115200 baud).
+4. Use the color picker, RGB sliders, or mode buttons to control the mood lamp in real time.
