@@ -165,3 +165,11 @@ The web interface is engineered with a Glassmorphism aesthetic and connects dire
 2. Open the file `web/index.html`.
 3. Click **Connect STM32** and select the active USB-to-UART COM port (115200 baud).
 4. Use the color picker, RGB sliders, or mode buttons to control the mood lamp in real time.
+
+---
+
+## 9. Authors & Contributors
+
+- **Dang Quang Minh**
+- **Duong Minh Trong**
+- **Ho Thanh Nhan**
