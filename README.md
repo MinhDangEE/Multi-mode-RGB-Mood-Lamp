@@ -1,127 +1,101 @@
 # Multi-Mode RGB Mood Lamp with Auto-Off Timer on STM32F103C8T6
 
-An intelligent embedded ambient lighting controller developed on the STM32F103C8T6 (ARM Cortex-M3) microcontroller. The system features 3-channel hardware Timer PWM for dynamic color generation, ADC-based analog brightness regulation, a KY-040 rotary encoder for auto-off countdown scheduling (10s increments), an SSD1306 I2C OLED display for real-time status monitoring, and a Glassmorphism Web Serial Dashboard for real-time color picking and control via UART (115200 baud).
+This project implements an embedded ambient lighting system using the STM32F103C8T6 (ARM Cortex-M3) microcontroller. It combines 3-channel 16-bit Timer PWM color blending, real-time potentiometer brightness regulation via ADC, rotary encoder countdown scheduling with instant cancellation, an SSD1306 OLED interface, and a browser-based Web Serial control dashboard communicating over UART at 115200 baud.
 
 ---
 
-## 1. Project Overview
+## 1. System Overview
 
-This project implements a multi-functional mood lamp utilizing core hardware peripherals of the STM32F103C8T6 MCU:
+The firmware leverages hardware peripherals of the STM32F103C8T6 MCU to drive a common-cathode RGB LED and manage interactive controls:
 
-- **16-bit Hardware Timer PWM (TIM3):** Generates 1 kHz PWM on 3 independent channels for smooth RGB color mixing and brightness fading.
-- **5 Operational Lighting Modes:** Solid White, Breathing White (Gamma 2.2 corrected), 6-Phase Rainbow Spectrum Crossfade, Custom RGB Color, and Sleep / Standby Mode.
-- **Analog Brightness Control (ADC1):** Continuously reads a 10k potentiometer on PA1 to scale the overall luminous intensity from 0% to 100%.
-- **KY-040 Rotary Encoder Timer (EXTI):** Configured with 10-second step increments/decrements per detent click, complete with instant timer cancellation via the integrated push button.
-- **OLED Display Interface (I2C1):** Visualizes active mode names, custom RGB coordinates, and countdown timer in real time on a 128x64 SSD1306 screen.
-- **Glassmorphism Web Serial Controller:** Web-based control panel built on the Web Serial API (Chrome / Edge), featuring a Color Picker, discrete RGB sliders, and a Line Stream Buffered UART monitor.
+TIM3 generates 1 kHz PWM across channels 1, 2, and 3 (PA6, PA7, PB0) for independent color mixing. Analog input from a 10k potentiometer on PA1 is converted through ADC1 to scale total luminous output from 0% to 100%. User control is handled via an external mode toggle button on PB12 and a KY-040 rotary encoder on PB14 and PB15, which adjusts the auto-off timer in 10-second increments with step debouncing. The timer push button (PB13) cancels active countdowns. Status information is rendered on a 128x64 SSD1306 OLED over software I2C.
 
 ---
 
-## 2. Hardware Pinout & Wiring Configuration
+## 2. Hardware Pinout & Peripheral Mapping
 
-The system is deployed on an STM32F103C8T6 "Blue Pill" board with the following pin assignments:
-
-| Peripheral / Module | Module Pin | STM32 Pin | Hardware Function | Notes |
+| Device / Module | Module Pin | STM32 Pin | Peripheral Function | Electrical Role |
 | :--- | :--- | :--- | :--- | :--- |
-| **RGB LED** | Red Channel | PA6 | TIM3_CH1 | 1 kHz PWM output |
-| | Green Channel | PA7 | TIM3_CH2 | 1 kHz PWM output |
-| | Blue Channel | PB0 | TIM3_CH3 | 1 kHz PWM output |
-| | Common Terminal | GND / 3.3V | Common Cathode / Anode | Common Cathode default |
-| **10k Potentiometer** | Wiper (Middle) | PA1 | ADC1_IN1 | Analog voltage reading |
-| | Outer Pins | 3.3V / GND | Power Rails | Voltage divider reference |
-| **KY-040 Encoder** | CLK (Phase A) | PB15 | EXTI15 | Dual-edge interrupt (Step detection) |
-| | DT (Phase B) | PB14 | EXTI14 | Dual-edge interrupt (Direction detection)|
-| | SW (Push Button) | PB13 | EXTI13 | Falling edge interrupt (Timer Cancel) |
-| | + (VCC) / GND | 3.3V / GND | Power Supply | 3.3V or 5V compatible |
-| **Mode Button** | Push Button | PB12 | EXTI12 | Falling edge interrupt (Mode toggle) |
-| **SSD1306 OLED** | SCL | PB6 | GPIO Output PP | Software I2C Clock Line |
-| | SDA | PB7 | GPIO Output PP | Software I2C Data Line |
-| | VCC / GND | 3.3V / GND | Power Supply | Display power |
-| **USB-to-UART Bridge** | TXD (USB Bridge)| PA10 | USART1_RX | Command reception (115200 8N1) |
-| | RXD (USB Bridge)| PA9 | USART1_TX | Log transmission (115200 8N1) |
-| | GND | GND | Common Ground | Required for signal ground |
-| **ST-Link V2 Debugger**| SWDIO / SWCLK / GND | PA13 / PA14 / GND | Serial Wire Debug (SWD) | Programming and debugging |
+| RGB LED | Red Channel | PA6 | TIM3_CH1 | 1 kHz PWM Output |
+| | Green Channel | PA7 | TIM3_CH2 | 1 kHz PWM Output |
+| | Blue Channel | PB0 | TIM3_CH3 | 1 kHz PWM Output |
+| | Common Terminal | GND | Ground | Common Cathode Reference |
+| 10k Potentiometer | Wiper Pin | PA1 | ADC1_IN1 | Analog Voltage Input |
+| | Outer Rails | 3.3V / GND | Power Rails | Voltage Divider Reference |
+| KY-040 Encoder | CLK (Phase A) | PB15 | EXTI15 | Dual-Edge Step Interrupt |
+| | DT (Phase B) | PB14 | EXTI14 | Direction Logic Input |
+| | SW (Push Switch) | PB13 | EXTI13 | Falling-Edge Timer Cancel |
+| | Power Rails | 3.3V / GND | Power Rails | 3.3V Supply |
+| Mode Button | Tactile Switch | PB12 | EXTI12 | Falling-Edge Mode Toggle |
+| SSD1306 OLED | SCL | PB6 | GPIO Output PP | Software I2C Clock |
+| | SDA | PB7 | GPIO Output PP | Software I2C Data |
+| | Power Rails | 3.3V / GND | Power Rails | Display Power |
+| USB-UART Bridge | TXD / RXD | PA10 / PA9 | USART1 (RX/TX) | 115200 8N1 Serial Protocol |
+| ST-Link V2 | SWDIO / SWCLK | PA13 / PA14 | SWD Debug | Firmware Flash & Debug |
 
 ---
 
 ## 3. Operational Lighting Modes
 
-1. **Mode 1 - Solid White (100% Constant Intensity):**
-   - Drives all three channels (Red, Green, Blue) at maximum duty cycle to generate uniform neutral white light.
-   - Master brightness is scaled continuously via the PA1 potentiometer.
+The lamp implements five discrete operational states:
 
-2. **Mode 2 - Breathing White (Gamma 2.2 Corrected):**
-   - Applies a smooth periodic brightness pulse using a non-linear Gamma 2.2 correction curve to match human eye luminous sensitivity.
-
-3. **Mode 3 - Rainbow Spectrum (6-Phase Crossfade):**
-   - Seamlessly transitions through 6 spectrum zones: Red -> Yellow -> Green -> Cyan -> Blue -> Magenta -> Red.
-   - Utilizes linear PWM crossfading for artifact-free color transitions.
-
-4. **Mode 4 - Custom RGB Color (Web Color Picker):**
-   - Receives RGB color coordinates directly from the Web Serial Dashboard or UART Terminal via `C:R,G,B\n` or `#RRGGBB\n` packets.
-   - Directly maps RGB values (0-255) to TIM3 compare registers.
-
-5. **Mode 0 - Sleep Mode (Standby / Off):**
-   - Disables all PWM outputs (0% duty cycle) to turn off the lamp completely.
-   - The system automatically enters this mode when the auto-off timer reaches zero.
+1. **Solid White:** Drives Red, Green, and Blue channels at full duty cycle. Overall luminous intensity is dynamically scaled by the PA1 potentiometer.
+2. **Breathing White:** Modulates intensity through a 3000 ms periodic cycle applying a non-linear Gamma 2.2 curve ($\text{Duty} = \text{MaxBright} \times \text{Progress}^{2.2}$) to match human eye lightness perception.
+3. **Rainbow Spectrum:** Cycles through six chromatic spectrum zones (Red $\rightarrow$ Yellow $\rightarrow$ Green $\rightarrow$ Cyan $\rightarrow$ Blue $\rightarrow$ Magenta $\rightarrow$ Red) over a 6000 ms period using linear PWM crossfading without color jumping.
+4. **Custom RGB:** Directly applies color coordinates transmitted over UART from the Web Serial palette.
+5. **Sleep / Standby:** Sets all PWM compare registers to zero, turning off the LED completely upon manual selection or timer expiration.
 
 ---
 
-## 4. Auto-Off Countdown Timer Mechanism
+## 4. Auto-Off Countdown Timer
 
-- **Clockwise Rotation (CW):** Each physical detent click adds 10 seconds to the timer memory (`+10s`).
-- **Counter-Clockwise Rotation (CCW):** Each click subtracts 10 seconds (`-10s`). Reducing the time to 0 seconds turns off the timer.
-- **Push Button Action (SW - PB13):** Instantly cancels the countdown and resets the timer (`Timer: OFF`).
-- **Automatic Countdown Execution:** A non-blocking 1-second system tick decrements the timer. When the remaining time reaches `00:00`, the system automatically transitions to **Sleep Mode (Mode 0)**, extinguishing all LEDs.
-- **Real-Time Visualization:** Remaining time (`MM:SS`) is rendered on the OLED display and transmitted via UART.
+Turning the KY-040 encoder clockwise increases timer duration by 10 seconds per detent click, while counter-clockwise rotation decreases duration by 10 seconds. Pressing the encoder shaft switch (PB13) clears the timer and disables countdown tracking.
+
+A background timer tick decrements remaining time once per second. When the counter reaches zero, the firmware automatically switches to Sleep Mode (Mode 0) and blanks the LED output. Remaining time is continuously updated on the OLED display and echoed over UART.
 
 ---
 
-## 5. Web Serial Dashboard & UART Protocol
+## 5. Web Serial Control & UART Protocol
 
-The web interface is engineered with a Glassmorphism aesthetic and connects directly to the microcontroller through the browser's Web Serial API.
+The browser interface connects directly to the STM32 USART1 port via the Web Serial API at 115200 baud. It includes a native color picker, individual R/G/B sliders, mode preset buttons, and a line-stream buffered serial log.
 
-### Features
-- **Direct USB Serial Connection:** Native browser-to-MCU serial communication at 115200 baud without third-party drivers.
-- **Live Color Picker:** Interactive color palette and discrete RGB sliders for real-time color syncing.
-- **Quick Preset Swatches:** Single-click selection of popular mood colors (Pastel Pink, Warm Amber, Neon Blue, Emerald, Purple).
-- **Mode Switching Cards:** Instant toggle buttons for all operating modes.
-- **Line Stream Buffered Terminal:** Prevents fragmented text and displays incoming serial telemetry neatly with timestamps.
+| Command Packet | Target Action | Example / Details |
+| :--- | :--- | :--- |
+| `1\n` or `w\n` | Switch to Solid White | Constant white illumination |
+| `2\n` or `b\n` | Switch to Breathing White | Gamma 2.2 breathing cycle |
+| `3\n` or `r\n` | Switch to Rainbow Spectrum | 6-phase chromatic crossfade |
+| `4\n` or `c\n` | Switch to Custom RGB | Uses current custom RGB registers |
+| `0\n` or `s\n` | Switch to Sleep Mode | Turns off PWM channels |
+| `n\n` or `Space` | Next Mode | Cycles sequentially through states |
+| `C:R,G,B\n` | Set Custom RGB Coordinates | Example: `C:255,120,40\n` |
+| `#RRGGBB\n` | Set Custom Hex Color | Example: `#FF7828\n` |
 
-### UART Communication Protocol
-
-- **Mode Commands:**
-  - `1\n` or `w\n`: Select Mode 1 (Solid White)
-  - `2\n` or `b\n`: Select Mode 2 (Breathing White)
-  - `3\n` or `r\n`: Select Mode 3 (Rainbow Spectrum)
-  - `4\n` or `c\n`: Select Mode 4 (Custom RGB)
-  - `0\n` or `s\n`: Select Mode 0 (Sleep / Standby)
-  - `n\n` or `Space`: Step to next mode
-- **Custom Color Packets:**
-  - `C:R,G,B\n` (e.g., `C:255,100,50\n` for custom RGB)
-  - `#RRGGBB\n` (e.g., `#FF6432\n` for hex format)
+To operate the web controller, open `web/index.html` in Chrome or Edge, click Connect STM32, choose the active COM port, and select colors or modes in real time.
 
 ---
 
-## 6. Demonstration & Functional Testing Video
+## 6. Demonstration Video
 
-Full demonstration videos illustrating hardware testing, mode transitions, potentiometer brightness control, KY-040 timer countdown, and Web Serial dashboard interaction are available at the following link:
+Functional testing footage, hardware validation, potentiometer brightness control, encoder timer countdown, and web serial communication can be reviewed here:
 
-- **Google Drive Video Demonstration:** [Watch Demo & Test Footage](https://drive.google.com/drive/folders/1vPH_NVBRHYjKIKNvcpQxKeFuqSAPMJKs?usp=sharing)
-
----
-
-## 7. Web Controller Quick Start
-
-1. Open Google Chrome, Microsoft Edge, or any Web Serial-compatible browser.
-2. Open the file `web/index.html`.
-3. Click **Connect STM32** and select the active USB-to-UART COM port (115200 baud).
-4. Use the color picker, RGB sliders, or mode buttons to control the mood lamp in real time.
+[Google Drive Demonstration Video](https://drive.google.com/drive/folders/1vPH_NVBRHYjKIKNvcpQxKeFuqSAPMJKs?usp=sharing)
 
 ---
 
-## 8. Authors & Contributors
+## 7. Limitations and Future Improvements
 
-- **Dang Quang Minh**
-- **Duong Minh Trong**
-- **Ho Thanh Nhan**
+While the current system operates reliably, several hardware and software limitations offer clear opportunities for future development:
+
+1. **State Persistence:** Current configuration parameters (active mode, custom RGB values, timer states) reside in volatile RAM and reset upon power loss. Emulating EEPROM in Flash memory (internal Flash pages) would enable persistent state recovery across reboot cycles.
+2. **Wireless Connectivity:** Communication currently requires a physical USB-UART cable. Integrating an ESP32 or BLE module (e.g., nRF52) would allow wireless Web Bluetooth or MQTT/Home Assistant IoT integration.
+3. **Encoder Sensor Upgrade:** The mechanical KY-040 encoder has finite mechanical contact life. Upgrading to a magnetic Hall-effect rotary encoder or optical encoder would eliminate mechanical wear and long-term contact degradation entirely.
+4. **Acoustic / Sound Sync Mode:** Adding an analog electret microphone with an operational amplifier or an I2S digital microphone (e.g., INMP441) would allow hardware FFT analysis on the STM32 to create audio-reactive music visualization.
+5. **Power Management:** In Sleep Mode, the microcontroller remains in full run mode with peripherals active. Implementing STM32 Stop Mode or Standby Mode with EXTI wakeup would significantly reduce idle current consumption for battery-powered operation.
+
+---
+
+## 8. Authors
+
+- Dang Quang Minh
+- Duong Minh Trong
+- Ho Thanh Nhan
