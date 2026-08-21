@@ -1,9 +1,3 @@
-/**
- * RGB Mood Lamp Controller - Glassmorphism Web Serial Controller
- * Designed for STM32F103C8T6 (115200 Baud)
- * Lucide Icons | Zero Emojis | Line Stream Buffer
- */
-
 let port = null;
 let reader = null;
 let keepReading = false;
@@ -14,7 +8,7 @@ let currentR = 255;
 let currentG = 255;
 let currentB = 255;
 
-// DOM Elements
+// DOM references
 const btnConnect = document.getElementById('btn-connect');
 const btnConnectLabel = document.getElementById('btn-connect-label');
 const connectionBadge = document.getElementById('connection-badge');
@@ -39,7 +33,6 @@ const swatches = document.querySelectorAll('.swatch');
 const terminalOutput = document.getElementById('terminal-output');
 const btnClearConsole = document.getElementById('btn-clear-console');
 
-// Initialize Lucide Icons
 function refreshIcons() {
     if (window.lucide) {
         lucide.createIcons();
@@ -47,16 +40,12 @@ function refreshIcons() {
 }
 document.addEventListener('DOMContentLoaded', refreshIcons);
 
-// Check Web Serial API support
 if (!('serial' in navigator)) {
-    logTerminal('[LỖI] Trình duyệt không hỗ trợ Web Serial API. Vui lòng sử dụng Chrome, Edge hoặc Cốc Cốc trên máy tính.', 'err');
+    logTerminal('[ERROR] Web Serial API not supported in this browser.', 'err');
     btnConnect.disabled = true;
-    btnConnectLabel.textContent = 'Không hỗ trợ';
+    btnConnectLabel.textContent = 'Unsupported';
 }
 
-// ----------------------------------------------------
-// Terminal Logger with Clean Timestamp Formatting
-// ----------------------------------------------------
 function logTerminal(message, type = 'rx') {
     if (!message || message.trim() === '') return;
     
@@ -84,9 +73,7 @@ btnClearConsole.addEventListener('click', () => {
     terminalOutput.innerHTML = '';
 });
 
-// ----------------------------------------------------
-// Web Serial Connect / Disconnect
-// ----------------------------------------------------
+// Connection Handlers
 btnConnect.addEventListener('click', async () => {
     if (port) {
         await disconnectSerial();
@@ -97,12 +84,12 @@ btnConnect.addEventListener('click', async () => {
 
 async function connectSerial() {
     try {
-        logTerminal('[SYS] Đang mở hộp thoại chọn cổng COM USB...', 'info');
+        logTerminal('[SYS] Requesting COM port...', 'info');
         port = await navigator.serial.requestPort();
         await port.open({ baudRate: 115200 });
 
         connectionBadge.className = 'status-badge connected';
-        connectionText.textContent = 'Đã kết nối COM (115200)';
+        connectionText.textContent = 'Connected (115200)';
         
         btnConnect.classList.add('is-connected');
         btnConnect.innerHTML = `
@@ -111,24 +98,21 @@ async function connectSerial() {
         `;
         refreshIcons();
 
-        logTerminal('[SYS] Kết nối thành công với vi điều khiển STM32!', 'info');
+        logTerminal('[SYS] Connected to STM32 successfully', 'info');
 
         keepReading = true;
         readSerialLoop();
     } catch (err) {
-        logTerminal(`[LỖI] Kết nối thất bại: ${err.message}`, 'err');
+        logTerminal(`[ERROR] Connection failed: ${err.message}`, 'err');
         port = null;
     }
 }
 
 async function disconnectSerial() {
     try {
-        logTerminal('[SYS] Đang ngắt kết nối cổng COM...', 'info');
-        
-        // 1. Tắt cờ đọc
+        logTerminal('[SYS] Disconnecting port...', 'info');
         keepReading = false;
 
-        // 2. Hủy reader đang chờ
         if (reader) {
             try {
                 await reader.cancel();
@@ -137,10 +121,8 @@ async function disconnectSerial() {
             }
         }
 
-        // 3. Đợi giải phóng Stream Lock
         await new Promise(resolve => setTimeout(resolve, 60));
 
-        // 4. Đóng cổng COM
         if (port) {
             try {
                 await port.close();
@@ -160,17 +142,14 @@ async function disconnectSerial() {
         `;
         refreshIcons();
 
-        logTerminal('[SYS] Đã ngắt kết nối an toàn với STM32.', 'info');
+        logTerminal('[SYS] Disconnected.', 'info');
     } catch (err) {
-        logTerminal(`[LỖI] Ngắt kết nối thất bại: ${err.message}`, 'err');
+        logTerminal(`[ERROR] Disconnect failed: ${err.message}`, 'err');
         port = null;
     }
 }
 
-// ----------------------------------------------------
-// Vòng lặp đọc dữ liệu UART với Line Stream Buffer
-// Ghép đầy đủ các mẩu vụn cho đến khi gặp dấu xuống dòng \n
-// ----------------------------------------------------
+// Serial Receiver
 async function readSerialLoop() {
     const textDecoder = new TextDecoder();
     serialRxAccumulator = '';
@@ -187,10 +166,8 @@ async function readSerialLoop() {
                     const chunk = textDecoder.decode(value, { stream: true });
                     serialRxAccumulator += chunk;
 
-                    // Kiểm tra có dấu xuống dòng không
                     if (serialRxAccumulator.includes('\n')) {
                         const lines = serialRxAccumulator.split('\n');
-                        // Giữ lại phần chưa kết thúc bởi \n vào accumulator
                         serialRxAccumulator = lines.pop();
 
                         for (const line of lines) {
@@ -201,7 +178,6 @@ async function readSerialLoop() {
                         }
                     }
 
-                    // Tự động xả dữ liệu nếu không có ký tự \n sau 150ms
                     if (flushTimeout) clearTimeout(flushTimeout);
                     flushTimeout = setTimeout(() => {
                         if (serialRxAccumulator.trim().length > 0) {
@@ -224,10 +200,10 @@ async function readSerialLoop() {
     }
 }
 
-// Gửi lệnh UART tới STM32
+// Send Command
 async function sendCommand(cmd) {
     if (!port || !port.writable) {
-        logTerminal(`[LỆNH NỘI BỘ] ${cmd.trim()}`, 'tx');
+        logTerminal(`[LOCAL] ${cmd.trim()}`, 'tx');
         return;
     }
 
@@ -236,15 +212,13 @@ async function sendCommand(cmd) {
         const writer = port.writable.getWriter();
         await writer.write(textEncoder.encode(cmd));
         writer.releaseLock();
-        logTerminal(`[TX] -> ${cmd.trim()}`, 'tx');
+        logTerminal(`[TX] ${cmd.trim()}`, 'tx');
     } catch (err) {
-        logTerminal(`[LỖI GỬI] ${err.message}`, 'err');
+        logTerminal(`[TX ERROR] ${err.message}`, 'err');
     }
 }
 
-// ----------------------------------------------------
-// Color Picker & RGB Calculations
-// ----------------------------------------------------
+// UI & Color logic
 function updateColorUI(r, g, b, fromInput = 'rgb') {
     currentR = parseInt(r);
     currentG = parseInt(g);
@@ -267,10 +241,7 @@ function updateColorUI(r, g, b, fromInput = 'rgb') {
     valB.textContent = currentB;
     hexVal.textContent = hex.toUpperCase();
 
-    // Solid Flat Color Fill (No Gradients)
     colorPreview.style.backgroundColor = `rgb(${currentR}, ${currentG}, ${currentB})`;
-    
-    // Status Orb Flat Accent Indicator
     statusOrb.style.borderColor = `rgb(${currentR}, ${currentG}, ${currentB})`;
     statusOrb.style.color = `rgb(${currentR}, ${currentG}, ${currentB})`;
 }
@@ -288,20 +259,17 @@ function rgbToHex(r, g, b) {
     return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
-// Event Listeners for Sliders
 [sliderR, sliderG, sliderB].forEach(slider => {
     slider.addEventListener('input', () => {
         updateColorUI(sliderR.value, sliderG.value, sliderB.value, 'slider');
     });
 });
 
-// Event Listener for Native Color Picker
 nativePicker.addEventListener('input', (e) => {
     const { r, g, b } = hexToRgb(e.target.value);
     updateColorUI(r, g, b, 'native');
 });
 
-// Event Listeners for Swatches
 swatches.forEach(swatch => {
     swatch.addEventListener('click', () => {
         const hex = swatch.getAttribute('data-color');
@@ -311,7 +279,6 @@ swatches.forEach(swatch => {
     });
 });
 
-// Apply Color Button
 btnApplyColor.addEventListener('click', () => {
     sendColorToSTM32(currentR, currentG, currentB);
 });
@@ -322,9 +289,6 @@ function sendColorToSTM32(r, g, b) {
     sendCommand(packet);
 }
 
-// ----------------------------------------------------
-// Mode Selection Handling
-// ----------------------------------------------------
 modeButtons.forEach(btn => {
     btn.addEventListener('click', () => {
         const mode = btn.getAttribute('data-mode');
@@ -348,6 +312,5 @@ function setActiveModeButton(mode) {
     });
 }
 
-// Initialize default color (White) & render icons
 updateColorUI(255, 255, 255);
 refreshIcons();
