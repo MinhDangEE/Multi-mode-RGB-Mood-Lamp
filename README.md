@@ -29,13 +29,13 @@ The system is deployed on an STM32F103C8T6 "Blue Pill" board with the following 
 | | Common Terminal | GND / 3.3V | Common Cathode / Anode | Common Cathode default |
 | **10k Potentiometer** | Wiper (Middle) | PA1 | ADC1_IN1 | Analog voltage reading |
 | | Outer Pins | 3.3V / GND | Power Rails | Voltage divider reference |
-| **KY-040 Encoder** | CLK (Phase A) | PB15 | EXTI15 | Falling edge interrupt (step counter) |
-| | DT (Phase B) | PB14 | GPIO Input | Direction detection (CW / CCW) |
+| **KY-040 Encoder** | CLK (Phase A) | PB15 | EXTI15 | Dual-edge interrupt (Step detection) |
+| | DT (Phase B) | PB14 | EXTI14 | Dual-edge interrupt (Direction detection)|
 | | SW (Push Button) | PB13 | EXTI13 | Falling edge interrupt (Timer Cancel) |
 | | + (VCC) / GND | 3.3V / GND | Power Supply | 3.3V or 5V compatible |
 | **Mode Button** | Push Button | PB12 | EXTI12 | Falling edge interrupt (Mode toggle) |
-| **SSD1306 OLED** | SCL | PB6 | I2C1_SCL | 400 kHz Fast I2C Clock |
-| | SDA | PB7 | I2C1_SDA | Fast I2C Data Line |
+| **SSD1306 OLED** | SCL | PB6 | GPIO Output PP | Software I2C Clock Line |
+| | SDA | PB7 | GPIO Output PP | Software I2C Data Line |
 | | VCC / GND | 3.3V / GND | Power Supply | Display power |
 | **USB-to-UART Bridge** | TXD (USB Bridge)| PA10 | USART1_RX | Command reception (115200 8N1) |
 | | RXD (USB Bridge)| PA9 | USART1_TX | Log transmission (115200 8N1) |
@@ -103,7 +103,15 @@ The web interface is engineered with a Glassmorphism aesthetic and connects dire
 
 ---
 
-## 6. Web Controller Quick Start
+## 6. Demonstration & Functional Testing Video
+
+Full demonstration videos illustrating hardware testing, mode transitions, potentiometer brightness control, KY-040 timer countdown, and Web Serial dashboard interaction are available at the following link:
+
+- **Google Drive Video Demonstration:** [Watch Demo & Test Footage](https://drive.google.com/drive/folders/1vPH_NVBRHYjKIKNvcpQxKeFuqSAPMJKs?usp=sharing)
+
+---
+
+## 7. Web Controller Quick Start
 
 1. Open Google Chrome, Microsoft Edge, or any Web Serial-compatible browser.
 2. Open the file `web/index.html`.
@@ -112,7 +120,7 @@ The web interface is engineered with a Glassmorphism aesthetic and connects dire
 
 ---
 
-## 7. Authors & Contributors
+## 8. Authors & Contributors
 
 - **Dang Quang Minh**
 - **Duong Minh Trong**
