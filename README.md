@@ -74,11 +74,11 @@ To operate the web controller, open `web/index.html` in Chrome or Edge, click Co
 
 ---
 
-## 6. Demonstration Video
+## 6. Demo Video
 
 Functional testing footage, hardware validation, potentiometer brightness control, encoder timer countdown, and web serial communication can be reviewed here:
 
-[Google Drive Demonstration Video](https://drive.google.com/drive/folders/1vPH_NVBRHYjKIKNvcpQxKeFuqSAPMJKs?usp=sharing)
+[Demo Video](https://drive.google.com/drive/folders/1vPH_NVBRHYjKIKNvcpQxKeFuqSAPMJKs?usp=sharing)
 
 ---
 
