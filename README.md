@@ -12,7 +12,17 @@ TIM3 generates 1 kHz PWM across channels 1, 2, and 3 (PA6, PA7, PB0) for indepen
 
 ---
 
-## 2. Hardware Pinout & Peripheral Mapping
+## 2. System Flowchart & Control Logic
+
+The execution flow, mode transition logic, potentiometer ADC brightness mapping, and countdown timer routine are illustrated in the architecture flowchart below:
+
+<div align="center">
+  <img src="docs/images/RGB_lamp_general.png" alt="System Flowchart" width="550" />
+</div>
+
+---
+
+## 3. Hardware Pinout & Peripheral Mapping
 
 | Device / Module | Module Pin | STM32 Pin | Peripheral Function | Electrical Role |
 | :--- | :--- | :--- | :--- | :--- |
@@ -35,7 +45,7 @@ TIM3 generates 1 kHz PWM across channels 1, 2, and 3 (PA6, PA7, PB0) for indepen
 
 ---
 
-## 3. Operational Lighting Modes
+## 4. Operational Lighting Modes
 
 The lamp implements five discrete operational states:
 
@@ -47,7 +57,7 @@ The lamp implements five discrete operational states:
 
 ---
 
-## 4. Auto-Off Countdown Timer
+## 5. Auto-Off Countdown Timer
 
 Turning the KY-040 encoder clockwise increases timer duration by 10 seconds per detent click, while counter-clockwise rotation decreases duration by 10 seconds. Pressing the encoder shaft switch (PB13) clears the timer and disables countdown tracking.
 
@@ -55,7 +65,7 @@ A background timer tick decrements remaining time once per second. When the coun
 
 ---
 
-## 5. Web Serial Control & UART Protocol
+## 6. Web Serial Control & UART Protocol
 
 The browser interface connects directly to the STM32 USART1 port via the Web Serial API at 115200 baud. It includes a native color picker, individual R/G/B sliders, mode preset buttons, and a line-stream buffered serial log.
 
@@ -74,7 +84,7 @@ To operate the web controller, open `web/index.html` in Chrome or Edge, click Co
 
 ---
 
-## 6. Demo Video
+## 7. Demo Video
 
 Functional testing footage, hardware validation, potentiometer brightness control, encoder timer countdown, and web serial communication can be reviewed here:
 
@@ -82,7 +92,7 @@ Functional testing footage, hardware validation, potentiometer brightness contro
 
 ---
 
-## 7. Limitations and Future Improvements
+## 8. Limitations and Future Improvements
 
 While the current system operates reliably, several hardware and software limitations offer clear opportunities for future development:
 
@@ -94,7 +104,7 @@ While the current system operates reliably, several hardware and software limita
 
 ---
 
-## 8. Authors
+## 9. Authors
 
 - Dang Quang Minh
 - Duong Minh Trong
