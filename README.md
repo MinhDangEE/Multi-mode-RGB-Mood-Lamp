@@ -40,8 +40,8 @@ TIM3 generates 1 kHz PWM across channels 1, 2, and 3 (PA6, PA7, PB0) for indepen
 The lamp implements five discrete operational states:
 
 1. **Solid White:** Drives Red, Green, and Blue channels at full duty cycle. Overall luminous intensity is dynamically scaled by the PA1 potentiometer.
-2. **Breathing White:** Modulates intensity through a 3000 ms periodic cycle applying a non-linear Gamma 2.2 curve ($\text{Duty} = \text{MaxBright} \times \text{Progress}^{2.2}$) to match human eye lightness perception.
-3. **Rainbow Spectrum:** Cycles through six chromatic spectrum zones (Red $\rightarrow$ Yellow $\rightarrow$ Green $\rightarrow$ Cyan $\rightarrow$ Blue $\rightarrow$ Magenta $\rightarrow$ Red) over a 6000 ms period using linear PWM crossfading without color jumping.
+2. **Breathing White:** Modulates intensity through a 3000 ms periodic cycle applying a non-linear Gamma 2.2 curve (`Duty = MaxBright * Progress^2.2`) to match human eye lightness perception.
+3. **Rainbow Spectrum:** Cycles through six chromatic spectrum zones (Red -> Yellow -> Green -> Cyan -> Blue -> Magenta -> Red) over a 6000 ms period using linear PWM crossfading without color jumping.
 4. **Custom RGB:** Directly applies color coordinates transmitted over UART from the Web Serial palette.
 5. **Sleep / Standby:** Sets all PWM compare registers to zero, turning off the LED completely upon manual selection or timer expiration.
 
