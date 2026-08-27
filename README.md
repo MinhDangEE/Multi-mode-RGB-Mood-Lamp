@@ -34,14 +34,14 @@ The complete hardware prototype is constructed using the following components an
 | Component / Module | Specification / Model | Quantity | Role in System |
 | :--- | :--- | :---: | :--- |
 | **Microcontroller Board** | STM32F103C8T6 Blue Pill (ARM Cortex-M3, 72 MHz, 64KB Flash) | 1 | Master embedded processing unit |
-| **RGB LED Module** | 5050 SMD Common-Cathode RGB LED Breakout Module | 1 | 3-channel PWM mood light emitter |
+| **RGB LED Module** |  Common-Cathode RGB LED Breakout Module | 1 | 3-channel PWM mood light emitter |
 | **Rotary Encoder Module** | KY-040 Quadrature Rotary Encoder Breakout Module | 1 | Auto-off timer adjustment and instant cancel push switch |
 | **OLED Display Module** | 0.96 inch SSD1306 I2C OLED Module (128x64 pixels, Blue/White) | 1 | Real-time status, mode, and countdown visualization |
 | **Potentiometer** | 10k Linear Rotary Potentiometer (B10K) | 1 | Analog 0% to 100% master brightness regulator |
 | **Mode Push Button** | 6x6mm Tactile Momentary Push Button | 1 | External hardware mode toggle trigger |
-| **USB-to-UART Adapter** | CP2102 / CH340 USB to Serial TTL Adapter | 1 | Bidirectional PC/Web Serial interface (115200 baud) |
+| **USB-to-UART Adapter** | CP2102 USB to Serial TTL Adapter | 1 | Bidirectional PC/Web Serial interface (115200 baud) |
 | **Debugger / Programmer** | ST-Link V2 USB Dongle | 1 | SWD firmware flashing and hardware debugging |
-| **Prototyping Accessories** | Solderless Breadboard and Dupont Jumper Wires | 1 set | Circuit interconnects and power distribution |
+| **Prototyping Accessories** | Solderless Breadboard and Jumper Wires | 1 set | Circuit interconnects and power distribution |
 
 ---
 
