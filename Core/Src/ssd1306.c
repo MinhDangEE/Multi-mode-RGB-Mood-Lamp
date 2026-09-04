@@ -69,7 +69,17 @@ void SW_I2C_WriteBuffer(uint8_t addr, uint8_t reg, uint8_t* data, size_t len) {
 }
 
 void ssd1306_Reset(void) {
-    /* configure PB6 and PB7 as Push-Pull */
+    /* Push-pull, so the bus works with no external pull-ups at all.
+     *
+     * Open-drain is the electrically correct choice and was tried first, but it
+     * needs pull-up resistors to ever reach a high level: on STM32F1 the internal
+     * pull-up is inactive in output mode, measured on hardware. Without them both
+     * lines sit low forever and the display never receives a single bit.
+     *
+     * The cost is the ACK bit: the master drives high while the SSD1306 pulls low,
+     * for one bit out of every nine. Both sides are current-limited by their own
+     * output impedance and it survives, but if pull-ups are ever fitted (4.7k from
+     * PB6 and PB7 to 3V3) switch this back to GPIO_MODE_OUTPUT_OD. */
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Pin = SW_SCL_PIN | SW_SDA_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;

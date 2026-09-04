@@ -1,0 +1,10 @@
+# Chứa mật khẩu WiFi và mã thiết bị — KHÔNG đẩy lên GitHub.
+# Bản mẫu cho người khác: esp32_mood_lamp/include/config.example.h
+esp32_mood_lamp/include/config.h
+
+# Thư mục build của PlatformIO (~40MB, sinh lại được)
+esp32_mood_lamp/.pio/
+
+# Vercel liên kết máy cục bộ, không dùng chung được
+web/.vercel/
+node_modules/

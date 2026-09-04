@@ -62,9 +62,18 @@
         STATE_SLEEP      // 4. TẮT TẤT CẢ (Sleep Mode)
     } SystemState;
 
-    SystemState current_state = STATE_SOLID;
-    uint8_t mode_changed_flag = 1;
-    uint8_t timer_pressed_flag = 0; // Thêm cờ cho nút Hẹn giờ
+    // --- Cấu hình bộ hẹn giờ tự tắt (Auto-off Timer) ---
+    // GIÁ TRỊ MẶC ĐỊNH, CHƯA CHỐT VỚI NHÓM — chỉnh lại nếu team thống nhất khác
+    #define TIMER_STEP_MIN   5   // mỗi lần bấm PB13 cộng thêm bao nhiêu phút
+    #define TIMER_MAX_MIN    30  // giới hạn tối đa bao nhiêu phút
+
+    // Các biến dưới đây được ghi trong ISR (EXTI/UART) và đọc ở main loop -> phải volatile,
+    // nếu không trình biên dịch có quyền cache chúng vào thanh ghi khi bật tối ưu (-Os).
+    volatile SystemState current_state = STATE_SOLID;
+    volatile uint8_t mode_changed_flag = 1;
+    volatile uint8_t screen_dirty = 1; // Báo cần vẽ lại toàn bộ OLED (đặt trong ISR, vẽ ở main loop)
+    volatile uint32_t timer_remaining_sec = 0; // Số giây còn lại của hẹn giờ, 0 = hẹn giờ đang tắt
+    uint32_t timer_last_tick = 0;     // Mốc HAL_GetTick() của lần trừ giây gần nhất (non-blocking)
     int16_t breath_val = 0;
     int8_t breath_step = 15;
     uint8_t rx_byte = 0; // Biến nhận dữ liệu từ Terminal qua UART
@@ -84,7 +93,49 @@
 
     /* Private user code ---------------------------------------------------------*/
     /* USER CODE BEGIN 0 */
+    /**
+      * @brief Redraw the whole OLED in a single pass: mode on top, auto-off timer below.
+      *
+      * Mode text and countdown share one framebuffer, so drawing them from two separate
+      * blocks made each one erase the other (the mode line vanished every second while a
+      * timer was running). One writer, one ssd1306_UpdateScreen().
+      */
+    static void draw_screen(void)
+    {
+        ssd1306_Fill(Black);
 
+        ssd1306_SetCursor(2, 2);
+        switch (current_state) {
+            case STATE_SOLID:     ssd1306_WriteString("1. SOLID WHITE", Font_7x10, White); break;
+            case STATE_BREATHING: ssd1306_WriteString("2. BREATHING",   Font_7x10, White); break;
+            case STATE_RAINBOW:   ssd1306_WriteString("3. RAINBOW",     Font_7x10, White); break;
+            case STATE_SLEEP:     ssd1306_WriteString("4. SLEEP OFF",   Font_7x10, White); break;
+        }
+        ssd1306_Line(0, 13, 127, 13, White);
+
+        if (timer_remaining_sec > 0) {
+            uint32_t remaining = timer_remaining_sec; // chụp 1 lần, tránh ISR đổi giữa chừng
+            // Chặn phút trong [0,99] để chuỗi luôn đúng 5 ký tự "MM:SS" — vừa khít
+            // 5 x 16px = 80px của Font_16x26 trên màn rộng 128px.
+            unsigned mm = (unsigned)((remaining / 60) % 100);
+            unsigned ss = (unsigned)(remaining % 60);
+            char timer_buf[8];
+            snprintf(timer_buf, sizeof(timer_buf), "%02u:%02u", mm, ss);
+
+            // Nhãn phải đối xứng với nhánh else. Bản trước ghi "HEN GIO TAT"
+            // (ý là "hẹn giờ tắt đèn") nhưng người dùng đọc thành "hẹn giờ đang tắt",
+            // trong khi thực tế nó đang chạy — hiểu ngược hoàn toàn.
+            ssd1306_SetCursor(2, 18);
+            ssd1306_WriteString("HEN GIO: ON", Font_7x10, White);
+            ssd1306_SetCursor(24, 32);
+            ssd1306_WriteString(timer_buf, Font_16x26, White); // số to, nhìn từ xa vẫn rõ
+        } else {
+            ssd1306_SetCursor(2, 18);
+            ssd1306_WriteString("HEN GIO: OFF", Font_7x10, White);
+        }
+
+        ssd1306_UpdateScreen();
+    }
     /* USER CODE END 0 */
 
     /**
@@ -138,6 +189,10 @@
       HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2); // Kênh Xanh lá (PA7)
       HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3); // Kênh Xanh dương (PB0)
 
+      // Hiệu chuẩn ADC trước khi dùng: STM32F1 bắt buộc chạy 1 lần sau khi bật ADC,
+      // bỏ qua thì giá trị đọc về lệch offset (vặn biến trở về 0 mà đèn vẫn sáng mờ).
+      HAL_ADCEx_Calibration_Start(&hadc1);
+
       // Bật ADC1 để đọc biến trở
       HAL_ADC_Start(&hadc1);
 
@@ -145,10 +200,17 @@
       HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
 
       // --- Bỏ quét I2C để tránh lỗi NACK trên Proteus ---
-      HAL_UART_Transmit(&huart1, (uint8_t*)"\r\n[BOOT] Init OLED at 0x3D...\r\n", 31, 100);
+      // Địa chỉ thật lấy từ SSD1306_I2C_ADDR trong ssd1306_conf.h (0x3C << 1).
+      // Nếu màn không lên, thử đổi sang 0x3D << 1 — đây là hai địa chỉ duy nhất của SSD1306.
+      {
+          char boot_msg[48];
+          int boot_len = snprintf(boot_msg, sizeof(boot_msg),
+                                  "\r\n[BOOT] Init OLED at 0x%02X...\r\n",
+                                  (unsigned)(SSD1306_I2C_ADDR >> 1));
+          HAL_UART_Transmit(&huart1, (uint8_t*)boot_msg, (uint16_t)boot_len, 100);
+      }
       // -------------------
 
-      HAL_UART_Transmit(&huart1, (uint8_t*)"[BOOT] Init OLED...\r\n", 21, 100);
       // Khởi tạo màn hình OLED
       ssd1306_Init();
       ssd1306_Fill(Black);
@@ -185,60 +247,60 @@
         uint16_t max_bright = (uint16_t)((adc_val * 999) / 4095);
         // ==========================================
 
-        // 1. Thông báo đổi chế độ qua UART và OLED
+        // ==========================================
+        // ĐẾM NGƯỢC HẸN GIỜ TỰ TẮT (non-blocking, dựa trên HAL_GetTick, không dùng delay)
+        // Chỉ trừ đúng 1 giây mỗi khi đủ 1000ms trôi qua, cộng dồn mốc thay vì gán lại
+        // now để không bị trôi lệch tích lũy theo thời gian.
+        if (timer_remaining_sec > 0 && (now - timer_last_tick >= 1000)) {
+            timer_last_tick += 1000;
+            timer_remaining_sec--;
+
+            if (timer_remaining_sec == 0) {
+                // Hết giờ -> tự chuyển sang Sleep, để khối mode_changed_flag bên dưới
+                // lo việc in UART + vẽ lại OLED theo đúng nấc Sleep như bình thường.
+                current_state = STATE_SLEEP;
+                mode_changed_flag = 1;
+            } else {
+                // Còn giờ -> báo cần vẽ lại số đếm ngược mới lên OLED
+                screen_dirty = 1;
+            }
+        }
+        // ==========================================
+
+        // 1. Thông báo đổi chế độ qua UART (phần OLED do draw_screen() lo, xem khối 1b)
         if (mode_changed_flag == 1) {
             mode_changed_flag = 0;
-
-            ssd1306_Fill(Black);
-            ssd1306_SetCursor(0, 5);
-            ssd1306_WriteString("MODE:", Font_7x10, White);
 
             switch(current_state) {
                 case STATE_SOLID: {
                     char msg_solid[] = "Nac 1: SOLID WHITE (Mau Trang Tinh 100%)\r\n";
                     HAL_UART_Transmit(&huart1, (uint8_t*)msg_solid, strlen(msg_solid), 100);
-                    ssd1306_SetCursor(0, 20);
-                    ssd1306_WriteString("1. SOLID WHITE", Font_7x10, White);
                     break;
                 }
                 case STATE_BREATHING: {
                     char msg_breath[] = "Nac 2: BREATHING WHITE (Tho Mau Trang Gamma 2.2)\r\n";
                     HAL_UART_Transmit(&huart1, (uint8_t*)msg_breath, strlen(msg_breath), 100);
-                    ssd1306_SetCursor(0, 20);
-                    ssd1306_WriteString("2. BREATHING", Font_7x10, White);
                     break;
                 }
                 case STATE_RAINBOW: {
                     char msg_rain[] = "Nac 3: RAINBOW SPECTRUM (Cau Vong 6 Giai Doan Chuyen Mau Muot)\r\n";
                     HAL_UART_Transmit(&huart1, (uint8_t*)msg_rain, strlen(msg_rain), 100);
-                    ssd1306_SetCursor(0, 20);
-                    ssd1306_WriteString("3. RAINBOW", Font_7x10, White);
                     break;
                 }
                 case STATE_SLEEP: {
                     char msg_sleep[] = "Nac 4: SLEEP (TAT HET DEN)\r\n";
                     HAL_UART_Transmit(&huart1, (uint8_t*)msg_sleep, strlen(msg_sleep), 100);
-                    ssd1306_SetCursor(0, 20);
-                    ssd1306_WriteString("4. SLEEP OFF", Font_7x10, White);
                     break;
                 }
             }
-            ssd1306_UpdateScreen();
+            screen_dirty = 1;
         }
 
-        // --- ĐOẠN XỬ LÝ VẼ OLED CHO NÚT TIMER ---
-        if (timer_pressed_flag == 1) {
-            timer_pressed_flag = 0; // Xóa cờ để không in liên tục
-
-            ssd1306_Fill(Black); // Xóa màn hình cũ
-
-            ssd1306_SetCursor(10, 10);
-            ssd1306_WriteString("TIMER MODE", Font_11x18, White); // In chữ to
-
-            ssd1306_SetCursor(25, 35);
-            ssd1306_WriteString("Da hen gio!", Font_7x10, White); // In chữ nhỏ
-
-            ssd1306_UpdateScreen(); // Đẩy dữ liệu ra màn hình
+        // 1b. VẼ OLED: một lần vẽ duy nhất cho cả nấc hiện tại lẫn đồng hồ đếm ngược.
+        // Cờ được bật khi đổi nấc, khi bấm PB13, và mỗi lần trừ đi 1 giây.
+        if (screen_dirty == 1) {
+            screen_dirty = 0; // Xóa cờ để không vẽ lại liên tục mỗi vòng lặp
+            draw_screen();
         }
         // ----------------------------------------
 
@@ -493,7 +555,9 @@
 
       /* USER CODE END TIM3_Init 1 */
       htim3.Instance = TIM3;
-      htim3.Init.Prescaler = 71;
+      // Clock hệ thống là HSI 8 MHz (không bật PLL). Prescaler 71 cho ra PWM chỉ 111 Hz
+      // -> mắt thấy nháy khi quay video. 7 cho ra 8 MHz / 8 / 1000 = 1 kHz.
+      htim3.Init.Prescaler = 7;
       htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
       htim3.Init.Period = 999;
       htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -633,13 +697,22 @@
             }
         }
 
-        // Xử lý nút Hẹn giờ (PB13)
+        // Xử lý nút Hẹn giờ (PB13) - mỗi lần bấm cộng thêm TIMER_STEP_MIN phút, tối đa TIMER_MAX_MIN phút
         if (GPIO_Pin == GPIO_PIN_13) {
             if ((current_time - last_pb13_time) > 300) {
-                char msg_timer[] = "-> Nut Hen Gio (PB13) vua duoc nhan!\r\n";
-                HAL_UART_Transmit(&huart1, (uint8_t*)msg_timer, strlen(msg_timer), 100);
+                timer_remaining_sec += (uint32_t)TIMER_STEP_MIN * 60;
+                if (timer_remaining_sec > (uint32_t)TIMER_MAX_MIN * 60) {
+                    timer_remaining_sec = (uint32_t)TIMER_MAX_MIN * 60;
+                }
+                timer_last_tick = current_time; // reset mốc đếm giây, tránh trừ hụt ngay sau khi bấm
 
-                timer_pressed_flag = 1; // --- ĐÃ THÊM CỜ CHỖ NÀY ---
+                char msg_timer[64];
+                int len = snprintf(msg_timer, sizeof(msg_timer),
+                                    "-> Hen gio +%d phut (con lai %lu giay)\r\n",
+                                    TIMER_STEP_MIN, (unsigned long)timer_remaining_sec);
+                HAL_UART_Transmit(&huart1, (uint8_t*)msg_timer, (uint16_t)len, 100);
+
+                screen_dirty = 1; // báo main loop vẽ ngay số đếm ngược mới, không đợi đủ 1s
 
                 last_pb13_time = current_time;
             }
