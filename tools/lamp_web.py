@@ -24,8 +24,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PROJ = HERE.parent
-REPO = PROJ.parent
-WEB_DIR = Path(os.environ.get("LAMP_WEB", REPO / "web"))
+WEB_DIR = Path(os.environ.get("LAMP_WEB", PROJ / "web"))
 ELF = Path(os.environ.get("LAMP_ELF", PROJ / "build" / "STM32.elf"))
 NM = os.environ.get("NM", "arm-none-eabi-nm")
 PORT = int(os.environ.get("LAMP_PORT", "8000"))

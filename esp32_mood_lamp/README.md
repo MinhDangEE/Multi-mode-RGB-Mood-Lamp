@@ -1,7 +1,7 @@
 # Cầu nối WiFi ↔ UART (ESP32-S3) cho RGB Mood Lamp
 
 ESP32-S3 ở đây **không điều khiển đèn**. Toàn bộ logic vẫn nằm ở STM32F103
-trong `final_project_RGB_mood_lamp/` — 4 nấc, gamma, cầu vồng, hẹn giờ, OLED.
+ở thư mục gốc repo này — 4 nấc, gamma, cầu vồng, hẹn giờ, OLED.
 ESP chỉ chuyển tiếp byte giữa internet và cổng UART của STM32, đúng như một
 sợi dây USB-TTL nhưng dài vô hạn.
 
