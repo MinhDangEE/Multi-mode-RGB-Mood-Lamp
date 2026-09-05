@@ -604,14 +604,22 @@
   // ================= CHẾ ĐỘ MQTT (ESP32 làm cầu nối tới STM32) =================
   // ESP32 không điều khiển đèn, nó chỉ chuyển tiếp byte. Nên ở chế độ này ta
   // gửi ĐÚNG những ký tự mà firmware STM32 vốn đã hiểu, y hệt Web Serial.
-  let client = null, devId = null, T = null, deviceOnline = false;
+  let client = null, devId = null, T = null;
+  // Broker giu lai tin nhan "retained" va day ve ngay khi vua subscribe — chung
+  // co the cu hang gio. Nen khong dung chung de ket luan den con song; chi tin
+  // vao tin nhan MOI. ESP32 bao status moi 5 giay, qua 15 giay im lang la mat.
+  let willSaysOnline = false, lastSeen = 0, heardWill = false;
+  const ALIVE_MS = 15000;
+  const isAlive = () => willSaysOnline && Date.now() - lastSeen < ALIVE_MS;
 
   function mqttStatus() {
     const linked = client && client.connected;
-    el.status.classList.toggle("on", linked && deviceOnline);
+    const alive = isAlive();
+    el.status.classList.toggle("on", linked && alive);
     el.statusText.textContent = !linked ? "Đang nối broker…"
-      : deviceOnline ? "Đèn online" : "Đèn đang offline";
-    setEnabled(linked && deviceOnline);
+      : alive ? "Đèn online"
+      : (heardWill || lastSeen) ? "Đèn đang offline" : "Đang chờ đèn báo danh…";
+    setEnabled(linked && alive);
   }
 
   // STM32 tự in ra "Nac 1: SOLID WHITE ..." mỗi lần đổi nấc, dùng luôn dòng
@@ -637,18 +645,26 @@
       mqttStatus();
     });
     client.on("reconnect", () => { log("[SYS] Mất broker, đang nối lại…", "err"); mqttStatus(); });
+    // Neu ESP32 bi rut dien dot ngot, broker phai doi het keepalive moi ban
+    // Last Will. Dong ho nay khien trang tu chuyen sang offline truoc do.
+    setInterval(mqttStatus, 2000);
     client.on("error", (e) => log("[ERR] " + e.message, "err"));
 
-    client.on("message", (topic, buf) => {
+    client.on("message", (topic, buf, packet) => {
       const text = buf.toString();
 
+      const fresh = !(packet && packet.retain);
+      if (fresh) lastSeen = Date.now();
+
       if (topic === T.online) {
-        const was = deviceOnline;
-        deviceOnline = text === "online";
-        if (was !== deviceOnline)
-          log(deviceOnline ? "[SYS] Cầu nối ESP32 đã online."
-                           : "[SYS] Cầu nối ESP32 mất kết nối.",
-              deviceOnline ? "sys" : "err");
+        const was = isAlive();
+        willSaysOnline = text === "online";
+        heardWill = true;
+        if (!willSaysOnline) lastSeen = 0;      // will bao chet -> quen moc cu
+        if (was !== isAlive())
+          log(isAlive() ? "[SYS] Cầu nối ESP32 đã online."
+                        : "[SYS] Cầu nối ESP32 mất kết nối.",
+              isAlive() ? "sys" : "err");
         mqttStatus();
         return;
       }
@@ -660,7 +676,7 @@
           // Màu chấm theo cường độ sóng, để nhìn phát biết mạng khoẻ hay yếu.
           const good = st.rssi > -60, ok = st.rssi > -75;
           el.ledBulb.style.setProperty("--led", good ? "#31d07a" : ok ? "#f5a623" : "#e95454");
-          if (!deviceOnline) { deviceOnline = true; mqttStatus(); }
+          if (fresh) { willSaysOnline = true; mqttStatus(); }
         } catch {}
         return;
       }
@@ -671,7 +687,7 @@
           if (!line) return;
           log(line, line.startsWith("[ESP]") ? "sys" : "rx");
           syncFromLine(line);
-          if (!deviceOnline) { deviceOnline = true; mqttStatus(); }
+          if (fresh) { willSaysOnline = true; mqttStatus(); }
         } catch {}
       }
     });
